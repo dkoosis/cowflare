@@ -10,7 +10,13 @@
 	"observability": {
 		"enabled": true
 	},
-	"compatibility_flags": ["nodejs_compat"]
+	"compatibility_flags": ["nodejs_compat"],
+	
+	// KV namespace for storing auth tokens
+	"kv_namespaces": [
+		{ "binding": "AUTH_STORE", "id": "7ca3e0b80b9e429488a0be33d7e259fb" }
+	]
+	
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
