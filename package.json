@@ -14,5 +14,10 @@
 		"typescript": "^5.5.2",
 		"vitest": "~3.2.0",
 		"wrangler": "^4.20.3"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.13.0",
+		"@types/crypto-js": "^4.2.2",
+		"crypto-js": "^4.2.0"
 	}
 }
