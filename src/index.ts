@@ -44,7 +44,7 @@ export default {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       });
     }
@@ -63,7 +63,7 @@ export default {
               protocolVersion: "1.0.0",
               serverInfo: {
                 name: "rtm-mcp-server",
-                version: "1.0.0"
+                version: "1.0.1"
               },
               capabilities: {
                 tools: {}
@@ -317,24 +317,23 @@ export default {
 
         if (method === "tools/call") {
           const { name, arguments: args } = params;
-          let result;
+          let resourceProtocol: string;
+          let resourceValue: any;
 
           try {
             switch (name) {
               case "rtm_get_auth_url": {
+                resourceProtocol = "rtm/auth-url";
                 const authParams: Record<string, string> = {
                   api_key: env.RTM_API_KEY,
                   perms: args.perms
                 };
-                
                 if (args.frob) {
                   authParams.frob = args.frob;
                 }
-                
                 authParams.api_sig = generateApiSig(authParams, env.RTM_SHARED_SECRET);
                 const authUrl = `https://www.rememberthemilk.com/services/auth/?${new URLSearchParams(authParams)}`;
-                
-                result = {
+                resourceValue = {
                   authUrl,
                   instructions: args.frob 
                     ? "Direct the user to this URL. After authorization, they should return to your app."
@@ -344,44 +343,45 @@ export default {
               }
 
               case "rtm_get_frob": {
+                resourceProtocol = "rtm/frob";
                 const response = await makeRTMRequest('rtm.auth.getFrob', {}, env);
-                result = { frob: response.frob };
+                resourceValue = response;
                 break;
               }
 
               case "rtm_get_token": {
+                resourceProtocol = "rtm/auth-token";
                 const response = await makeRTMRequest('rtm.auth.getToken', { frob: args.frob }, env);
-                result = {
-                  token: response.auth.token,
-                  perms: response.auth.perms,
-                  user: response.auth.user
-                };
+                resourceValue = response.auth;
                 break;
               }
 
               case "rtm_create_timeline": {
+                resourceProtocol = "rtm/timeline";
                 const response = await makeRTMRequest('rtm.timelines.create', { auth_token: args.auth_token }, env);
-                result = { timeline: response.timeline };
+                resourceValue = response;
                 break;
               }
 
               case "rtm_get_lists": {
+                resourceProtocol = "rtm/lists";
                 const response = await makeRTMRequest('rtm.lists.getList', { auth_token: args.auth_token }, env);
-                result = { lists: response.lists.list };
+                resourceValue = response.lists.list;
                 break;
               }
 
               case "rtm_get_tasks": {
+                resourceProtocol = "rtm/tasks";
                 const taskParams: Record<string, string> = { auth_token: args.auth_token };
                 if (args.list_id) taskParams.list_id = args.list_id;
                 if (args.filter) taskParams.filter = args.filter;
-                
                 const response = await makeRTMRequest('rtm.tasks.getList', taskParams, env);
-                result = { tasks: response.tasks };
+                resourceValue = response.tasks;
                 break;
               }
 
               case "rtm_add_task": {
+                resourceProtocol = "rtm/task-add-result";
                 const taskParams: Record<string, string> = {
                   auth_token: args.auth_token,
                   timeline: args.timeline,
@@ -389,16 +389,13 @@ export default {
                   parse: "1"
                 };
                 if (args.list_id) taskParams.list_id = args.list_id;
-                
                 const response = await makeRTMRequest('rtm.tasks.add', taskParams, env);
-                result = {
-                  transaction: response.transaction,
-                  list: response.list
-                };
+                resourceValue = response;
                 break;
               }
 
               case "rtm_complete_task": {
+                resourceProtocol = "rtm/task-complete-result";
                 const response = await makeRTMRequest('rtm.tasks.complete', {
                   auth_token: args.auth_token,
                   timeline: args.timeline,
@@ -406,14 +403,12 @@ export default {
                   taskseries_id: args.taskseries_id,
                   task_id: args.task_id
                 }, env);
-                result = {
-                  transaction: response.transaction,
-                  list: response.list
-                };
+                resourceValue = response;
                 break;
               }
 
               case "rtm_set_priority": {
+                resourceProtocol = "rtm/task-priority-result";
                 const response = await makeRTMRequest('rtm.tasks.setPriority', {
                   auth_token: args.auth_token,
                   timeline: args.timeline,
@@ -422,29 +417,27 @@ export default {
                   task_id: args.task_id,
                   priority: args.priority
                 }, env);
-                result = {
-                  transaction: response.transaction,
-                  list: response.list
-                };
+                resourceValue = response;
                 break;
               }
 
               case "rtm_undo": {
+                resourceProtocol = "rtm/undo-result";
                 await makeRTMRequest('rtm.transactions.undo', {
                   auth_token: args.auth_token,
                   timeline: args.timeline,
                   transaction_id: args.transaction_id
                 }, env);
-                result = { success: true };
+                resourceValue = { success: true };
                 break;
               }
 
               case "rtm_parse_time": {
+                resourceProtocol = "rtm/parsed-time";
                 const timeParams: Record<string, string> = { text: args.text };
                 if (args.timezone) timeParams.timezone = args.timezone;
-                
                 const response = await makeRTMRequest('rtm.time.parse', timeParams, env);
-                result = { time: response.time };
+                resourceValue = response.time;
                 break;
               }
 
@@ -458,8 +451,13 @@ export default {
               result: {
                 content: [
                   {
-                    type: "text",
-                    text: JSON.stringify(result, null, 2)
+                    type: "resource",
+                    resource: {
+                      protocol: resourceProtocol,
+                      id: "rtm-result-" + Date.now(),
+                      version: "1.0",
+                      value: resourceValue
+                    }
                   }
                 ]
               }
@@ -478,6 +476,7 @@ export default {
                 message: error.message
               }
             }), {
+              status: 500,
               headers: {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*"
@@ -494,6 +493,7 @@ export default {
             message: "Method not found"
           }
         }), {
+          status: 404,
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
@@ -507,6 +507,7 @@ export default {
             message: "Parse error"
           }
         }), {
+          status: 400,
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
@@ -515,6 +516,11 @@ export default {
       }
     }
 
-    return new Response("RTM MCP Server", { status: 200 });
+    return new Response("RTM MCP Server", { 
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*"
+      }
+    });
   }
 };
