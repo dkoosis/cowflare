@@ -3,6 +3,63 @@ import MD5 from "crypto-js/md5";
 interface Env {
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
+  AUTH_STORE: KVNamespace;
+  SERVER_URL: string;
+}
+
+// Rate limiter
+async function checkRateLimit(clientId: string, env: Env): Promise<boolean> {
+  const key = `rate:${clientId}`;
+  const data = await env.AUTH_STORE.get(key);
+  
+  if (!data) {
+    await env.AUTH_STORE.put(key, JSON.stringify({
+      count: 1,
+      resetAt: Date.now() + 3600000 // 1 hour
+    }), { expirationTtl: 3600 });
+    return true;
+  }
+  
+  const rateData = JSON.parse(data);
+  if (Date.now() > rateData.resetAt) {
+    await env.AUTH_STORE.put(key, JSON.stringify({
+      count: 1,
+      resetAt: Date.now() + 3600000
+    }), { expirationTtl: 3600 });
+    return true;
+  }
+  
+  if (rateData.count >= 100) {
+    return false;
+  }
+  
+  rateData.count++;
+  await env.AUTH_STORE.put(key, JSON.stringify(rateData), { expirationTtl: 3600 });
+  return true;
+}
+
+// Cache auth tokens
+async function cacheAuthToken(userId: string, authData: any, env: Env): Promise<void> {
+  await env.AUTH_STORE.put(`token:${userId}`, JSON.stringify({
+    token: authData.token,
+    username: authData.user.username,
+    fullname: authData.user.fullname,
+    cachedAt: Date.now(),
+    expires: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+  }), { expirationTtl: 7 * 24 * 60 * 60 });
+}
+
+async function getCachedToken(userId: string, env: Env): Promise<any | null> {
+  const data = await env.AUTH_STORE.get(`token:${userId}`);
+  if (!data) return null;
+  
+  const cached = JSON.parse(data);
+  if (Date.now() > cached.expires) {
+    await env.AUTH_STORE.delete(`token:${userId}`);
+    return null;
+  }
+  
+  return cached;
 }
 
 // RTM API helper functions
@@ -49,9 +106,38 @@ export default {
       });
     }
 
+    // Health check endpoint
+    if (request.url.endsWith('/health')) {
+      return new Response(JSON.stringify({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString() 
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // Handle JSON-RPC requests
     if (request.method === "POST") {
       try {
+        // Rate limiting
+        const clientId = request.headers.get('CF-Connecting-IP') || 'anonymous';
+        const allowed = await checkRateLimit(clientId, env);
+        if (!allowed) {
+          return new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Rate limit exceeded. Please try again later."
+            }
+          }), {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          });
+        }
+
         const body = await request.json();
         const { method, params, id } = body;
 
@@ -63,7 +149,7 @@ export default {
               protocolVersion: "1.0.0",
               serverInfo: {
                 name: "rtm-mcp-server",
-                version: "1.0.1"
+                version: "1.1.0"
               },
               capabilities: {
                 tools: {}
@@ -119,9 +205,27 @@ export default {
                       frob: {
                         type: "string",
                         description: "The frob to exchange for a token"
+                      },
+                      user_id: {
+                        type: "string",
+                        description: "Optional user ID for caching the token"
                       }
                     },
                     required: ["frob"]
+                  }
+                },
+                {
+                  name: "rtm_get_cached_token",
+                  description: "Retrieve a cached authentication token",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      user_id: {
+                        type: "string",
+                        description: "User ID to retrieve token for"
+                      }
+                    },
+                    required: ["user_id"]
                   }
                 },
                 {
@@ -150,6 +254,32 @@ export default {
                       }
                     },
                     required: ["auth_token"]
+                  }
+                },
+                {
+                  name: "rtm_add_list",
+                  description: "Create a new list",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      name: {
+                        type: "string",
+                        description: "List name"
+                      },
+                      filter: {
+                        type: "string",
+                        description: "Smart list filter (optional)"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "name"]
                   }
                 },
                 {
@@ -228,6 +358,143 @@ export default {
                       }
                     },
                     required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
+                  }
+                },
+                {
+                  name: "rtm_delete_task",
+                  description: "Delete a task",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      list_id: {
+                        type: "string",
+                        description: "List ID"
+                      },
+                      taskseries_id: {
+                        type: "string",
+                        description: "Task series ID"
+                      },
+                      task_id: {
+                        type: "string",
+                        description: "Task ID"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
+                  }
+                },
+                {
+                  name: "rtm_set_due_date",
+                  description: "Set or clear task due date",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      list_id: {
+                        type: "string",
+                        description: "List ID"
+                      },
+                      taskseries_id: {
+                        type: "string",
+                        description: "Task series ID"
+                      },
+                      task_id: {
+                        type: "string",
+                        description: "Task ID"
+                      },
+                      due: {
+                        type: "string",
+                        description: "Due date/time (ISO format or RTM natural language)"
+                      },
+                      has_due_time: {
+                        type: "string",
+                        enum: ["0", "1"],
+                        description: "Whether time is specified (0=date only, 1=date+time)"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
+                  }
+                },
+                {
+                  name: "rtm_add_tags",
+                  description: "Add tags to a task",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      list_id: {
+                        type: "string",
+                        description: "List ID"
+                      },
+                      taskseries_id: {
+                        type: "string",
+                        description: "Task series ID"
+                      },
+                      task_id: {
+                        type: "string",
+                        description: "Task ID"
+                      },
+                      tags: {
+                        type: "string",
+                        description: "Comma-separated list of tags to add"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id", "tags"]
+                  }
+                },
+                {
+                  name: "rtm_move_task",
+                  description: "Move task to another list",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      from_list_id: {
+                        type: "string",
+                        description: "Source list ID"
+                      },
+                      to_list_id: {
+                        type: "string",
+                        description: "Destination list ID"
+                      },
+                      taskseries_id: {
+                        type: "string",
+                        description: "Task series ID"
+                      },
+                      task_id: {
+                        type: "string",
+                        description: "Task ID"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "from_list_id", "to_list_id", "taskseries_id", "task_id"]
                   }
                 },
                 {
@@ -352,7 +619,23 @@ export default {
               case "rtm_get_token": {
                 resourceProtocol = "rtm/auth-token";
                 const response = await makeRTMRequest('rtm.auth.getToken', { frob: args.frob }, env);
+                
+                // Cache the token if user_id provided
+                if (args.user_id) {
+                  await cacheAuthToken(args.user_id, response.auth, env);
+                }
+                
                 resourceValue = response.auth;
+                break;
+              }
+
+              case "rtm_get_cached_token": {
+                resourceProtocol = "rtm/cached-token";
+                const cached = await getCachedToken(args.user_id, env);
+                if (!cached) {
+                  throw new Error("No cached token found for this user");
+                }
+                resourceValue = cached;
                 break;
               }
 
@@ -367,6 +650,19 @@ export default {
                 resourceProtocol = "rtm/lists";
                 const response = await makeRTMRequest('rtm.lists.getList', { auth_token: args.auth_token }, env);
                 resourceValue = response.lists.list;
+                break;
+              }
+
+              case "rtm_add_list": {
+                resourceProtocol = "rtm/list-add-result";
+                const listParams: Record<string, string> = {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  name: args.name
+                };
+                if (args.filter) listParams.filter = args.filter;
+                const response = await makeRTMRequest('rtm.lists.add', listParams, env);
+                resourceValue = response;
                 break;
               }
 
@@ -400,6 +696,63 @@ export default {
                   auth_token: args.auth_token,
                   timeline: args.timeline,
                   list_id: args.list_id,
+                  taskseries_id: args.taskseries_id,
+                  task_id: args.task_id
+                }, env);
+                resourceValue = response;
+                break;
+              }
+
+              case "rtm_delete_task": {
+                resourceProtocol = "rtm/task-delete-result";
+                const response = await makeRTMRequest('rtm.tasks.delete', {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  list_id: args.list_id,
+                  taskseries_id: args.taskseries_id,
+                  task_id: args.task_id
+                }, env);
+                resourceValue = response;
+                break;
+              }
+
+              case "rtm_set_due_date": {
+                resourceProtocol = "rtm/task-due-result";
+                const dueParams: Record<string, string> = {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  list_id: args.list_id,
+                  taskseries_id: args.taskseries_id,
+                  task_id: args.task_id
+                };
+                if (args.due) dueParams.due = args.due;
+                if (args.has_due_time) dueParams.has_due_time = args.has_due_time;
+                const response = await makeRTMRequest('rtm.tasks.setDueDate', dueParams, env);
+                resourceValue = response;
+                break;
+              }
+
+              case "rtm_add_tags": {
+                resourceProtocol = "rtm/task-tags-result";
+                const response = await makeRTMRequest('rtm.tasks.addTags', {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  list_id: args.list_id,
+                  taskseries_id: args.taskseries_id,
+                  task_id: args.task_id,
+                  tags: args.tags
+                }, env);
+                resourceValue = response;
+                break;
+              }
+
+              case "rtm_move_task": {
+                resourceProtocol = "rtm/task-move-result";
+                const response = await makeRTMRequest('rtm.tasks.moveTo', {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  from_list_id: args.from_list_id,
+                  to_list_id: args.to_list_id,
                   taskseries_id: args.taskseries_id,
                   task_id: args.task_id
                 }, env);
@@ -516,7 +869,7 @@ export default {
       }
     }
 
-    return new Response("RTM MCP Server", { 
+    return new Response("RTM MCP Server v1.1.0", { 
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": "*"
