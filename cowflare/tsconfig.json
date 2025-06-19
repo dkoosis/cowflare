@@ -40,6 +40,6 @@
 			"./worker-configuration.d.ts"
 		]
 	},
-	"exclude": ["test"],
-	"include": ["worker-configuration.d.ts", "src/**/*.ts"]
+	"exclude": ["cowflare/test"],
+	"include": ["worker-configuration.d.ts", "cowflare/src/**/*.ts"]
 }
