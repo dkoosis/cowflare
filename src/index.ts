@@ -38,8 +38,6 @@ async function makeRTMRequest(method: string, params: Record<string, string>, en
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-
     // Handle CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -51,57 +49,33 @@ export default {
       });
     }
 
-    // SSE endpoint for MCP
-    if (url.pathname === "/sse") {
-      const encoder = new TextEncoder();
-      let keepAliveInterval: number;
+    // Handle JSON-RPC requests
+    if (request.method === "POST") {
+      try {
+        const body = await request.json();
+        const { method, params, id } = body;
 
-      const stream = new ReadableStream({
-        async start(controller) {
-          // Send initial message
-          const initMessage = {
+        if (method === "initialize") {
+          return new Response(JSON.stringify({
             jsonrpc: "2.0",
-            method: "connection.initialized",
-            params: {
+            id,
+            result: {
               protocolVersion: "1.0.0",
               serverInfo: {
                 name: "rtm-mcp-server",
                 version: "1.0.0"
               },
               capabilities: {
-                tools: true
+                tools: {}
               }
             }
-          };
-          
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(initMessage)}\n\n`));
-
-          // Keep connection alive
-          keepAliveInterval = setInterval(() => {
-            controller.enqueue(encoder.encode(": keepalive\n\n"));
-          }, 30000);
-        },
-        
-        cancel() {
-          if (keepAliveInterval) clearInterval(keepAliveInterval);
+          }), {
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          });
         }
-      });
-
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
-    }
-
-    // JSON-RPC endpoint
-    if (request.method === "POST") {
-      try {
-        const body = await request.json();
-        const { method, params, id } = body;
 
         if (method === "tools/list") {
           return new Response(JSON.stringify({
@@ -255,6 +229,81 @@ export default {
                     },
                     required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
                   }
+                },
+                {
+                  name: "rtm_set_priority",
+                  description: "Set task priority",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      list_id: {
+                        type: "string",
+                        description: "List ID"
+                      },
+                      taskseries_id: {
+                        type: "string",
+                        description: "Task series ID"
+                      },
+                      task_id: {
+                        type: "string",
+                        description: "Task ID"
+                      },
+                      priority: {
+                        type: "string",
+                        enum: ["1", "2", "3", "N"],
+                        description: "Priority (1=High, 2=Medium, 3=Low, N=None)"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id", "priority"]
+                  }
+                },
+                {
+                  name: "rtm_undo",
+                  description: "Undo a transaction",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      auth_token: {
+                        type: "string",
+                        description: "Authentication token"
+                      },
+                      timeline: {
+                        type: "string",
+                        description: "Timeline ID"
+                      },
+                      transaction_id: {
+                        type: "string",
+                        description: "Transaction ID to undo"
+                      }
+                    },
+                    required: ["auth_token", "timeline", "transaction_id"]
+                  }
+                },
+                {
+                  name: "rtm_parse_time",
+                  description: "Parse a time string using RTM's natural language processing",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      text: {
+                        type: "string",
+                        description: "Time string to parse (e.g., 'tomorrow at 3pm', 'next friday')"
+                      },
+                      timezone: {
+                        type: "string",
+                        description: "Timezone (optional, e.g., 'America/New_York')"
+                      }
+                    },
+                    required: ["text"]
+                  }
                 }
               ]
             }
@@ -361,6 +410,41 @@ export default {
                   transaction: response.transaction,
                   list: response.list
                 };
+                break;
+              }
+
+              case "rtm_set_priority": {
+                const response = await makeRTMRequest('rtm.tasks.setPriority', {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  list_id: args.list_id,
+                  taskseries_id: args.taskseries_id,
+                  task_id: args.task_id,
+                  priority: args.priority
+                }, env);
+                result = {
+                  transaction: response.transaction,
+                  list: response.list
+                };
+                break;
+              }
+
+              case "rtm_undo": {
+                await makeRTMRequest('rtm.transactions.undo', {
+                  auth_token: args.auth_token,
+                  timeline: args.timeline,
+                  transaction_id: args.transaction_id
+                }, env);
+                result = { success: true };
+                break;
+              }
+
+              case "rtm_parse_time": {
+                const timeParams: Record<string, string> = { text: args.text };
+                if (args.timezone) timeParams.timezone = args.timezone;
+                
+                const response = await makeRTMRequest('rtm.time.parse', timeParams, env);
+                result = { time: response.time };
                 break;
               }
 
