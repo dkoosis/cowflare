@@ -1,6 +1,14 @@
+// File: cowflare/src/validation.ts
+
 import { z } from 'zod';
 
-// Custom Error Classes
+// --- Custom Error Classes ---
+
+/**
+ * Represents an error returned from the RTM (Remember The Milk) API.
+ * @param {string} message - The error message from the API.
+ * @param {string} [code] - The optional error code from the API.
+ */
 export class RTMAPIError extends Error {
   constructor(message: string, public code?: string) {
     super(message);
@@ -8,6 +16,11 @@ export class RTMAPIError extends Error {
   }
 }
 
+/**
+ * Represents a validation error for incoming tool arguments.
+ * @param {string} message - The validation error message.
+ * @param {string} [field] - The optional field that failed validation.
+ */
 export class ValidationError extends Error {
   constructor(message: string, public field?: string) {
     super(message);
@@ -15,6 +28,9 @@ export class ValidationError extends Error {
   }
 }
 
+/**
+ * Represents an error thrown when a client exceeds the configured rate limit.
+ */
 export class RateLimitError extends Error {
   constructor() {
     super('Rate limit exceeded. Please try again later.');
@@ -22,7 +38,11 @@ export class RateLimitError extends Error {
   }
 }
 
-// TypeScript Interfaces
+// --- RTM API Response Interfaces ---
+
+/**
+ * Describes the successful authentication response from RTM.
+ */
 export interface RTMAuthResponse {
   token: string;
   user: {
@@ -32,34 +52,46 @@ export interface RTMAuthResponse {
   };
 }
 
+/**
+ * Describes the response for creating a new timeline.
+ */
 export interface RTMTimelineResponse {
   timeline: string;
 }
 
+/**
+ * Describes a single list object from RTM.
+ */
 export interface RTMList {
   id: string;
   name: string;
-  deleted: string;
-  locked: string;
-  archived: string;
+  deleted: string; // "0" or "1"
+  locked: string;   // "0" or "1"
+  archived: string; // "0" or "1"
   position: string;
-  smart: string;
+  smart: string;    // "0" or "1"
   sort_order?: string;
   filter?: string;
 }
 
+/**
+ * Describes a single task instance within a task series.
+ */
 export interface RTMTask {
   id: string;
   due?: string;
-  has_due_time: string;
+  has_due_time: string; // "0" or "1"
   added: string;
   completed?: string;
   deleted?: string;
-  priority: string;
+  priority: string; // "N", "1", "2", "3"
   postponed: string;
   estimate?: string;
 }
 
+/**
+ * Describes a task series, which contains one or more task instances.
+ */
 export interface RTMTaskSeries {
   id: string;
   created: string;
@@ -74,21 +106,27 @@ export interface RTMTaskSeries {
   task: RTMTask[];
 }
 
-// Validation Schemas
+// --- Zod Validation Schemas ---
+
+/** Validates arguments for the initial authentication setup. */
 export const AuthenticateSchema = z.object({});
 
+/** Validates arguments for completing the authentication process. */
 export const CompleteAuthSchema = z.object({
   session_id: z.string().min(1, 'Session ID is required')
 });
 
+/** Validates arguments for creating a timeline for undoable actions. */
 export const CreateTimelineSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required')
 });
 
+/** Validates arguments for retrieving all of the user's lists. */
 export const GetListsSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required')
 });
 
+/** Validates arguments for adding a new list. */
 export const AddListSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -96,12 +134,14 @@ export const AddListSchema = z.object({
   filter: z.string().optional()
 });
 
+/** Validates arguments for retrieving tasks. */
 export const GetTasksSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   list_id: z.string().optional(),
   filter: z.string().optional()
 });
 
+/** Validates arguments for adding a new task using Smart Add. */
 export const AddTaskSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -109,6 +149,7 @@ export const AddTaskSchema = z.object({
   list_id: z.string().optional()
 });
 
+/** Validates arguments for marking a task as complete. */
 export const CompleteTaskSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -117,6 +158,7 @@ export const CompleteTaskSchema = z.object({
   task_id: z.string().min(1, 'Task ID is required')
 });
 
+/** Validates arguments for deleting a task. */
 export const DeleteTaskSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -125,6 +167,7 @@ export const DeleteTaskSchema = z.object({
   task_id: z.string().min(1, 'Task ID is required')
 });
 
+/** Validates arguments for setting a task's due date. */
 export const SetDueDateSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -135,6 +178,7 @@ export const SetDueDateSchema = z.object({
   has_due_time: z.enum(['0', '1']).optional()
 });
 
+/** Validates arguments for adding tags to a task. */
 export const AddTagsSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -144,6 +188,7 @@ export const AddTagsSchema = z.object({
   tags: z.string().min(1, 'Tags are required')
 });
 
+/** Validates arguments for moving a task to a different list. */
 export const MoveTaskSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -153,6 +198,7 @@ export const MoveTaskSchema = z.object({
   task_id: z.string().min(1, 'Task ID is required')
 });
 
+/** Validates arguments for setting a task's priority. */
 export const SetPrioritySchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
@@ -162,12 +208,14 @@ export const SetPrioritySchema = z.object({
   priority: z.enum(['1', '2', '3', 'N'])
 });
 
+/** Validates arguments for undoing a previous transaction. */
 export const UndoSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required'),
   timeline: z.string().min(1, 'Timeline is required'),
   transaction_id: z.string().min(1, 'Transaction ID is required')
 });
 
+/** Validates arguments for parsing a time string with RTM's engine. */
 export const ParseTimeSchema = z.object({
   text: z.string().min(1, 'Text to parse is required'),
   timezone: z.string().optional()
