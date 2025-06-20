@@ -32,8 +32,8 @@ export async function checkRateLimit(clientId: string, env: Env): Promise<boolea
   return true;
 }
 
-export async function cacheAuthToken(userId: string, authData: any, env: Env): Promise<void> {
-  await env.AUTH_STORE.put(`token:${userId}`, JSON.stringify({
+export async function cacheAuthToken(sessionId: string, authData: any, env: Env): Promise<void> {
+  await env.AUTH_STORE.put(`token:${sessionId}`, JSON.stringify({
     token: authData.token,
     username: authData.user.username,
     fullname: authData.user.fullname,
@@ -42,13 +42,13 @@ export async function cacheAuthToken(userId: string, authData: any, env: Env): P
   }), { expirationTtl: 7 * 24 * 60 * 60 });
 }
 
-export async function getCachedToken(userId: string, env: Env): Promise<any | null> {
-  const data = await env.AUTH_STORE.get(`token:${userId}`);
+export async function getCachedToken(sessionId: string, env: Env): Promise<any | null> {
+  const data = await env.AUTH_STORE.get(`token:${sessionId}`);
   if (!data) return null;
   
   const cached = JSON.parse(data);
   if (Date.now() > cached.expires) {
-    await env.AUTH_STORE.delete(`token:${userId}`);
+    await env.AUTH_STORE.delete(`token:${sessionId}`);
     return null;
   }
   

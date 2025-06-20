@@ -1,34 +1,39 @@
 export const tools = [
   {
     name: "rtm_authenticate",
-    description: "Complete RTM authentication setup (use this first!)",
+    description: "Start RTM authentication setup",
     inputSchema: {
       type: "object",
-      properties: {
-        user_id: {
-          type: "string",
-          description: "Your unique identifier (e.g., your email or username)"
-        }
-      },
-      required: ["user_id"]
+      properties: {},
+      required: []
     }
   },
   {
     name: "rtm_complete_auth",
-    description: "Complete authentication after authorizing (step 2)",
+    description: "Complete authentication after authorizing on RTM",
     inputSchema: {
       type: "object",
       properties: {
-        frob: {
+        session_id: {
           type: "string",
-          description: "The frob from the previous step"
-        },
-        user_id: {
-          type: "string",
-          description: "Your unique identifier"
+          description: "Session ID from authentication setup"
         }
       },
-      required: ["frob", "user_id"]
+      required: ["session_id"]
+    }
+  },
+  {
+    name: "rtm_check_auth_status",
+    description: "Check if authentication was completed",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "Session ID from authentication"
+        }
+      },
+      required: ["session_id"]
     }
   },
   {
