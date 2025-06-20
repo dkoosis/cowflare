@@ -520,13 +520,8 @@ export default {
               result: {
                 content: [
                   {
-                    type: "resource",
-                    resource: {
-                      protocol: result.protocol,
-                      id: "rtm-result-" + Date.now(),
-                      version: "1.0",
-                      value: result.value
-                    }
+                    type: "text",
+                    text: JSON.stringify(result.value, null, 2)
                   }
                 ]
               }
@@ -567,7 +562,6 @@ export default {
             });
           }
         }
-
         return new Response(JSON.stringify({
           jsonrpc: "2.0",
           id,
