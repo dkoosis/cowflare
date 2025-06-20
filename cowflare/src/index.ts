@@ -1,6 +1,30 @@
 import { generateApiSig, makeRTMRequest } from './rtm-api';
 import { checkRateLimit, cacheAuthToken, getCachedToken } from './auth';
 import { tools } from './tools';
+import {
+  RTMAPIError,
+  ValidationError,
+  RateLimitError,
+  RTMAuthResponse,
+  RTMTimelineResponse,
+  RTMList,
+  RTMTaskSeries,
+  AuthenticateSchema,
+  CompleteAuthSchema,
+  CreateTimelineSchema,
+  GetListsSchema,
+  AddListSchema,
+  GetTasksSchema,
+  AddTaskSchema,
+  CompleteTaskSchema,
+  DeleteTaskSchema,
+  SetDueDateSchema,
+  AddTagsSchema,
+  MoveTaskSchema,
+  SetPrioritySchema,
+  UndoSchema,
+  ParseTimeSchema
+} from './validation';
 
 interface Env {
   RTM_API_KEY: string;
@@ -9,270 +33,321 @@ interface Env {
   SERVER_URL: string;
 }
 
-// Generate unique session ID
+interface PendingAuth {
+  frob: string;
+  createdAt: number;
+}
+
+interface CachedAuth {
+  token: string;
+  username: string;
+  fullname: string;
+  cachedAt: number;
+}
+
 function generateSessionId(): string {
   return crypto.randomUUID();
 }
 
-// Store pending auth session
 async function storePendingAuth(sessionId: string, frob: string, env: Env): Promise<void> {
   await env.AUTH_STORE.put(`pending:${sessionId}`, JSON.stringify({
     frob,
     createdAt: Date.now()
-  }), { expirationTtl: 600 }); // 10 minute expiry
+  }), { expirationTtl: 600 });
 }
 
-// Get pending auth session
-async function getPendingAuth(sessionId: string, env: Env): Promise<{ frob: string } | null> {
+async function getPendingAuth(sessionId: string, env: Env): Promise<PendingAuth | null> {
   const data = await env.AUTH_STORE.get(`pending:${sessionId}`);
   return data ? JSON.parse(data) : null;
 }
 
-// Main handler for tool calls
-async function handleToolCall(name: string, args: any, env: Env): Promise<{ protocol: string; value: any }> {
-  switch (name) {
-    case "rtm_authenticate": {
-      // Generate session ID
-      const sessionId = generateSessionId();
-      
-      // Check for cached token first (using session ID as key)
-      const cached = await getCachedToken(sessionId, env);
-      if (cached) {
-        return {
-          protocol: "rtm/auth-setup",
-          value: {
-            success: true,
-            auth_token: cached.token,
-            username: cached.username,
-            message: `Welcome back ${cached.fullname}! Your authentication is still valid.`,
-            next_steps: [
-              "You're ready to use RTM!",
-              "Try: 'Show me my tasks' or 'Add a task: Buy milk tomorrow'"
-            ]
-          }
-        };
-      }
-      
-      // Get frob
-      const frobResponse = await makeRTMRequest('rtm.auth.getFrob', {}, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      const frob = frobResponse.frob;
-      
-      // Store pending auth
-      await storePendingAuth(sessionId, frob, env);
-      
-      // Generate auth URL with callback
-      const authParams: Record<string, string> = {
-        api_key: env.RTM_API_KEY,
-        perms: 'write',
-        frob: frob
-      };
-      authParams.api_sig = generateApiSig(authParams, env.RTM_SHARED_SECRET);
-      
-      // RTM doesn't support callbacks - use standard auth URL
-      const authUrl = `https://www.rememberthemilk.com/services/auth/?${new URLSearchParams(authParams)}`;
-      
-      return {
-        protocol: "rtm/auth-setup",
-        value: {
-          success: false,
-          session_id: sessionId,
-          frob: frob,
-          auth_url: authUrl,
-          message: "Authentication required",
-          instructions: [
-            "1. Click the link to authorize",
-            "2. After authorizing, return here",
-            "3. I'll check if you're connected"
-          ]
-        }
-      };
+function validateToolArgs(toolName: string, args: any): any {
+  try {
+    switch (toolName) {
+      case "rtm_authenticate":
+        return AuthenticateSchema.parse(args);
+      case "rtm_complete_auth":
+        return CompleteAuthSchema.parse(args);
+      case "rtm_create_timeline":
+        return CreateTimelineSchema.parse(args);
+      case "rtm_get_lists":
+        return GetListsSchema.parse(args);
+      case "rtm_add_list":
+        return AddListSchema.parse(args);
+      case "rtm_get_tasks":
+        return GetTasksSchema.parse(args);
+      case "rtm_add_task":
+        return AddTaskSchema.parse(args);
+      case "rtm_complete_task":
+        return CompleteTaskSchema.parse(args);
+      case "rtm_delete_task":
+        return DeleteTaskSchema.parse(args);
+      case "rtm_set_due_date":
+        return SetDueDateSchema.parse(args);
+      case "rtm_add_tags":
+        return AddTagsSchema.parse(args);
+      case "rtm_move_task":
+        return MoveTaskSchema.parse(args);
+      case "rtm_set_priority":
+        return SetPrioritySchema.parse(args);
+      case "rtm_undo":
+        return UndoSchema.parse(args);
+      case "rtm_parse_time":
+        return ParseTimeSchema.parse(args);
+      default:
+        throw new ValidationError(`Unknown tool: ${toolName}`);
     }
-
-    case "rtm_complete_auth": {
-      const sessionId = args.session_id;
-      
-      // Get pending auth
-      const pending = await getPendingAuth(sessionId, env);
-      if (!pending) {
-        return {
-          protocol: "rtm/auth-complete",
-          value: {
-            success: false,
-            message: "Session expired. Please start authentication again."
-          }
-        };
-      }
-      
-      try {
-        // Exchange frob for token
-        const response = await makeRTMRequest('rtm.auth.getToken', { frob: pending.frob }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
-        // Cache the auth token
-        await cacheAuthToken(sessionId, response.auth, env);
-        
-        // Clean up pending
-        await env.AUTH_STORE.delete(`pending:${sessionId}`);
-        
-        return {
-          protocol: "rtm/auth-complete",
-          value: {
-            success: true,
-            auth_token: response.auth.token,
-            username: response.auth.user.username,
-            fullname: response.auth.user.fullname,
-            message: `Success! Welcome ${response.auth.user.fullname}!`,
-            next_steps: [
-              "You're all set!",
-              "Try: 'Show me my tasks' or 'Add a task: Call mom tomorrow at 2pm'"
-            ]
-          }
-        };
-      } catch (error: any) {
-        return {
-          protocol: "rtm/auth-complete",
-          value: {
-            success: false,
-            message: "Authorization not complete yet. Make sure you authorized the app on RTM, then try again."
-          }
-        };
-      }
+  } catch (error: any) {
+    if (error.errors) {
+      const firstError = error.errors[0];
+      throw new ValidationError(`${firstError.path.join('.')}: ${firstError.message}`, firstError.path.join('.'));
     }
-
-    case "rtm_create_timeline": {
-      const response = await makeRTMRequest('rtm.timelines.create', { auth_token: args.auth_token }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/timeline", value: response };
-    }
-
-    case "rtm_get_lists": {
-      const response = await makeRTMRequest('rtm.lists.getList', { auth_token: args.auth_token }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/lists", value: response.lists.list };
-    }
-
-    case "rtm_add_list": {
-      const listParams: Record<string, string> = {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        name: args.name
-      };
-      if (args.filter) listParams.filter = args.filter;
-      const response = await makeRTMRequest('rtm.lists.add', listParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/list-add-result", value: response };
-    }
-
-    case "rtm_get_tasks": {
-      const taskParams: Record<string, string> = { auth_token: args.auth_token };
-      if (args.list_id) taskParams.list_id = args.list_id;
-      if (args.filter) taskParams.filter = args.filter;
-      const response = await makeRTMRequest('rtm.tasks.getList', taskParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/tasks", value: response.tasks };
-    }
-
-    case "rtm_add_task": {
-      const taskParams: Record<string, string> = {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        name: args.name,
-        parse: "1"
-      };
-      if (args.list_id) taskParams.list_id = args.list_id;
-      const response = await makeRTMRequest('rtm.tasks.add', taskParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-add-result", value: response };
-    }
-
-    case "rtm_complete_task": {
-      const response = await makeRTMRequest('rtm.tasks.complete', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        list_id: args.list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-complete-result", value: response };
-    }
-
-    case "rtm_delete_task": {
-      const response = await makeRTMRequest('rtm.tasks.delete', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        list_id: args.list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-delete-result", value: response };
-    }
-
-    case "rtm_set_due_date": {
-      const dueParams: Record<string, string> = {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        list_id: args.list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id
-      };
-      if (args.due) dueParams.due = args.due;
-      if (args.has_due_time) dueParams.has_due_time = args.has_due_time;
-      const response = await makeRTMRequest('rtm.tasks.setDueDate', dueParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-due-result", value: response };
-    }
-
-    case "rtm_add_tags": {
-      const response = await makeRTMRequest('rtm.tasks.addTags', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        list_id: args.list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id,
-        tags: args.tags
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-tags-result", value: response };
-    }
-
-    case "rtm_move_task": {
-      const response = await makeRTMRequest('rtm.tasks.moveTo', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        from_list_id: args.from_list_id,
-        to_list_id: args.to_list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-move-result", value: response };
-    }
-
-    case "rtm_set_priority": {
-      const response = await makeRTMRequest('rtm.tasks.setPriority', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        list_id: args.list_id,
-        taskseries_id: args.taskseries_id,
-        task_id: args.task_id,
-        priority: args.priority
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/task-priority-result", value: response };
-    }
-
-    case "rtm_undo": {
-      await makeRTMRequest('rtm.transactions.undo', {
-        auth_token: args.auth_token,
-        timeline: args.timeline,
-        transaction_id: args.transaction_id
-      }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/undo-result", value: { success: true } };
-    }
-
-    case "rtm_parse_time": {
-      const timeParams: Record<string, string> = { text: args.text };
-      if (args.timezone) timeParams.timezone = args.timezone;
-      const response = await makeRTMRequest('rtm.time.parse', timeParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-      return { protocol: "rtm/parsed-time", value: response.time };
-    }
-
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+    throw error;
   }
 }
 
-// Handle auth callback
+async function handleToolCall(name: string, args: any, env: Env): Promise<{ protocol: string; value: any }> {
+  // Log request
+  console.log(`[${new Date().toISOString()}] ${name} ${JSON.stringify(args)}`);
+  
+  // Validate input
+  const validatedArgs = validateToolArgs(name, args);
+  
+  try {
+    switch (name) {
+      case "rtm_authenticate": {
+        const sessionId = generateSessionId();
+        
+        const cached = await getCachedToken(sessionId, env);
+        if (cached) {
+          return {
+            protocol: "rtm/auth-setup",
+            value: {
+              success: true,
+              auth_token: cached.token,
+              username: cached.username,
+              message: `Welcome back ${cached.fullname}! Your authentication is still valid.`,
+              next_steps: [
+                "You're ready to use RTM!",
+                "Try: 'Show me my tasks' or 'Add a task: Buy milk tomorrow'"
+              ]
+            }
+          };
+        }
+        
+        const frobResponse = await makeRTMRequest('rtm.auth.getFrob', {}, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        const frob = frobResponse.frob;
+        
+        await storePendingAuth(sessionId, frob, env);
+        
+        const authParams: Record<string, string> = {
+          api_key: env.RTM_API_KEY,
+          perms: 'write',
+          frob: frob
+        };
+        authParams.api_sig = generateApiSig(authParams, env.RTM_SHARED_SECRET);
+        
+        // Use SERVER_URL for proper OAuth callback
+        const callbackUrl = `${env.SERVER_URL}/auth/callback?session=${sessionId}`;
+        const authUrl = `https://www.rememberthemilk.com/services/auth/?${new URLSearchParams(authParams)}&redirect=${encodeURIComponent(callbackUrl)}`;
+        
+        return {
+          protocol: "rtm/auth-setup",
+          value: {
+            success: false,
+            session_id: sessionId,
+            frob: frob,
+            auth_url: authUrl,
+            callback_url: callbackUrl,
+            message: "Authentication required",
+            instructions: [
+              "1. Click the link to authorize",
+              "2. You'll be redirected back automatically",
+              "3. Complete auth with rtm_complete_auth"
+            ]
+          }
+        };
+      }
+
+      case "rtm_complete_auth": {
+        const sessionId = validatedArgs.session_id;
+        
+        const pending = await getPendingAuth(sessionId, env);
+        if (!pending) {
+          throw new RTMAPIError("Session expired. Please start authentication again.");
+        }
+        
+        try {
+          const response = await makeRTMRequest('rtm.auth.getToken', { frob: pending.frob }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+          
+          await cacheAuthToken(sessionId, response.auth, env);
+          await env.AUTH_STORE.delete(`pending:${sessionId}`);
+          
+          return {
+            protocol: "rtm/auth-complete",
+            value: {
+              success: true,
+              auth_token: response.auth.token,
+              username: response.auth.user.username,
+              fullname: response.auth.user.fullname,
+              message: `Success! Welcome ${response.auth.user.fullname}!`,
+              next_steps: [
+                "You're all set!",
+                "Try: 'Show me my tasks' or 'Add a task: Call mom tomorrow at 2pm'"
+              ]
+            }
+          };
+        } catch (error: any) {
+          throw new RTMAPIError("Authorization not complete yet. Make sure you authorized the app on RTM, then try again.");
+        }
+      }
+
+      case "rtm_create_timeline": {
+        const response: RTMTimelineResponse = await makeRTMRequest('rtm.timelines.create', { auth_token: validatedArgs.auth_token }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/timeline", value: response };
+      }
+
+      case "rtm_get_lists": {
+        const response = await makeRTMRequest('rtm.lists.getList', { auth_token: validatedArgs.auth_token }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/lists", value: response.lists.list as RTMList[] };
+      }
+
+      case "rtm_add_list": {
+        const listParams: Record<string, string> = {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          name: validatedArgs.name
+        };
+        if (validatedArgs.filter) listParams.filter = validatedArgs.filter;
+        const response = await makeRTMRequest('rtm.lists.add', listParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/list-add-result", value: response };
+      }
+
+      case "rtm_get_tasks": {
+        const taskParams: Record<string, string> = { auth_token: validatedArgs.auth_token };
+        if (validatedArgs.list_id) taskParams.list_id = validatedArgs.list_id;
+        if (validatedArgs.filter) taskParams.filter = validatedArgs.filter;
+        const response = await makeRTMRequest('rtm.tasks.getList', taskParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/tasks", value: response.tasks };
+      }
+
+      case "rtm_add_task": {
+        const taskParams: Record<string, string> = {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          name: validatedArgs.name,
+          parse: "1"
+        };
+        if (validatedArgs.list_id) taskParams.list_id = validatedArgs.list_id;
+        const response = await makeRTMRequest('rtm.tasks.add', taskParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-add-result", value: response };
+      }
+
+      case "rtm_complete_task": {
+        const response = await makeRTMRequest('rtm.tasks.complete', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          list_id: validatedArgs.list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-complete-result", value: response };
+      }
+
+      case "rtm_delete_task": {
+        const response = await makeRTMRequest('rtm.tasks.delete', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          list_id: validatedArgs.list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-delete-result", value: response };
+      }
+
+      case "rtm_set_due_date": {
+        const dueParams: Record<string, string> = {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          list_id: validatedArgs.list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id
+        };
+        if (validatedArgs.due) dueParams.due = validatedArgs.due;
+        if (validatedArgs.has_due_time) dueParams.has_due_time = validatedArgs.has_due_time;
+        const response = await makeRTMRequest('rtm.tasks.setDueDate', dueParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-due-result", value: response };
+      }
+
+      case "rtm_add_tags": {
+        const response = await makeRTMRequest('rtm.tasks.addTags', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          list_id: validatedArgs.list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id,
+          tags: validatedArgs.tags
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-tags-result", value: response };
+      }
+
+      case "rtm_move_task": {
+        const response = await makeRTMRequest('rtm.tasks.moveTo', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          from_list_id: validatedArgs.from_list_id,
+          to_list_id: validatedArgs.to_list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-move-result", value: response };
+      }
+
+      case "rtm_set_priority": {
+        const response = await makeRTMRequest('rtm.tasks.setPriority', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          list_id: validatedArgs.list_id,
+          taskseries_id: validatedArgs.taskseries_id,
+          task_id: validatedArgs.task_id,
+          priority: validatedArgs.priority
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/task-priority-result", value: response };
+      }
+
+      case "rtm_undo": {
+        await makeRTMRequest('rtm.transactions.undo', {
+          auth_token: validatedArgs.auth_token,
+          timeline: validatedArgs.timeline,
+          transaction_id: validatedArgs.transaction_id
+        }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/undo-result", value: { success: true } };
+      }
+
+      case "rtm_parse_time": {
+        const timeParams: Record<string, string> = { text: validatedArgs.text };
+        if (validatedArgs.timezone) timeParams.timezone = validatedArgs.timezone;
+        const response = await makeRTMRequest('rtm.time.parse', timeParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
+        return { protocol: "rtm/parsed-time", value: response.time };
+      }
+
+      default:
+        throw new ValidationError(`Unknown tool: ${name}`);
+    }
+  } catch (error: any) {
+    if (error instanceof RTMAPIError || error instanceof ValidationError) {
+      throw error;
+    }
+    
+    // Convert generic errors to RTMAPIError
+    if (error.message?.includes('RTM API Error')) {
+      throw new RTMAPIError(error.message);
+    }
+    
+    throw new RTMAPIError(`Unexpected error: ${error.message}`);
+  }
+}
+
 async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get('session');
@@ -281,28 +356,23 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
     return new Response('Invalid session', { status: 400 });
   }
   
-  // Get pending auth
   const pending = await getPendingAuth(sessionId, env);
   if (!pending) {
     return new Response('Session expired', { status: 400 });
   }
   
   try {
-    // Exchange frob for token
     const response = await makeRTMRequest('rtm.auth.getToken', { frob: pending.frob }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
     
-    // Store auth data with session ID
     await env.AUTH_STORE.put(`auth:${sessionId}`, JSON.stringify({
       token: response.auth.token,
       username: response.auth.user.username,
       fullname: response.auth.user.fullname,
       cachedAt: Date.now()
-    }), { expirationTtl: 7 * 24 * 60 * 60 }); // 7 days
+    }), { expirationTtl: 7 * 24 * 60 * 60 });
     
-    // Clean up pending auth
     await env.AUTH_STORE.delete(`pending:${sessionId}`);
     
-    // Return success page
     return new Response(`
       <!DOCTYPE html>
       <html>
@@ -322,7 +392,6 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
           <p class="close">You can close this tab and return to Claude.</p>
         </div>
         <script>
-          // Optional: auto-close after 3 seconds
           setTimeout(() => {
             window.close();
           }, 3000);
@@ -339,7 +408,6 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Handle CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -352,12 +420,10 @@ export default {
 
     const url = new URL(request.url);
 
-    // Handle auth callback
     if (url.pathname === '/auth/callback') {
       return handleAuthCallback(request, env);
     }
 
-    // Health check endpoint
     if (url.pathname === '/health') {
       return new Response(JSON.stringify({ 
         status: 'healthy', 
@@ -367,28 +433,15 @@ export default {
       });
     }
 
-    // Handle JSON-RPC requests
     if (request.method === "POST") {
       try {
-        // Rate limiting
+        // Rate limiting with improved fallback chain
         const clientId = request.headers.get('CF-Connecting-IP') || 
                        request.headers.get('X-Forwarded-For')?.split(',')[0] || 
                        'anonymous';
         const allowed = await checkRateLimit(clientId, env);
         if (!allowed) {
-          return new Response(JSON.stringify({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Rate limit exceeded. Please try again later."
-            }
-          }), {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*"
-            }
-          });
+          throw new RateLimitError();
         }
 
         const body = await request.json();
@@ -402,7 +455,7 @@ export default {
               protocolVersion: "2024-11-05",
               serverInfo: {
                 name: "rtm-mcp-server",
-                version: "1.2.0"
+                version: "1.1.0"
               },
               capabilities: {
                 tools: {}
@@ -484,15 +537,29 @@ export default {
               }
             });
           } catch (error: any) {
+            let errorCode = -32000;
+            let statusCode = 500;
+            
+            if (error instanceof RateLimitError) {
+              errorCode = -32000;
+              statusCode = 429;
+            } else if (error instanceof ValidationError) {
+              errorCode = -32602;
+              statusCode = 400;
+            } else if (error instanceof RTMAPIError) {
+              errorCode = -32000;
+              statusCode = 500;
+            }
+            
             return new Response(JSON.stringify({
               jsonrpc: "2.0",
               id,
               error: {
-                code: -32000,
+                code: errorCode,
                 message: error.message
               }
             }), {
-              status: 500,
+              status: statusCode,
               headers: {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*"
@@ -532,7 +599,7 @@ export default {
       }
     }
 
-    return new Response("RTM MCP Server v1.2.0", { 
+    return new Response("RTM MCP Server v1.1.0", { 
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": "*"

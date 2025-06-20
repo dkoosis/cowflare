@@ -3,6 +3,7 @@ interface Env {
 }
 
 export async function checkRateLimit(clientId: string, env: Env): Promise<boolean> {
+  // Updated fallback chain for client identification
   const key = `rate:${clientId}`;
   const data = await env.AUTH_STORE.get(key);
   
