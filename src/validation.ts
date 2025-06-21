@@ -1,4 +1,4 @@
-// File: cowflare/src/validation.ts
+// File: src/validation.ts
 
 import { z } from 'zod';
 
@@ -116,6 +116,11 @@ export const CompleteAuthSchema = z.object({
   session_id: z.string().min(1, 'Session ID is required')
 });
 
+/** Validates arguments for checking authentication status. */
+export const CheckAuthStatusSchema = z.object({
+  session_id: z.string().min(1, 'Session ID is required')
+});
+
 /** Validates arguments for creating a timeline for undoable actions. */
 export const CreateTimelineSchema = z.object({
   auth_token: z.string().min(1, 'Auth token is required')
@@ -220,3 +225,21 @@ export const ParseTimeSchema = z.object({
   text: z.string().min(1, 'Text to parse is required'),
   timezone: z.string().optional()
 });
+
+// Type exports for validated schemas
+export type AuthenticateArgs = z.infer<typeof AuthenticateSchema>;
+export type CompleteAuthArgs = z.infer<typeof CompleteAuthSchema>;
+export type CheckAuthStatusArgs = z.infer<typeof CheckAuthStatusSchema>;
+export type CreateTimelineArgs = z.infer<typeof CreateTimelineSchema>;
+export type GetListsArgs = z.infer<typeof GetListsSchema>;
+export type AddListArgs = z.infer<typeof AddListSchema>;
+export type GetTasksArgs = z.infer<typeof GetTasksSchema>;
+export type AddTaskArgs = z.infer<typeof AddTaskSchema>;
+export type CompleteTaskArgs = z.infer<typeof CompleteTaskSchema>;
+export type DeleteTaskArgs = z.infer<typeof DeleteTaskSchema>;
+export type SetDueDateArgs = z.infer<typeof SetDueDateSchema>;
+export type AddTagsArgs = z.infer<typeof AddTagsSchema>;
+export type MoveTaskArgs = z.infer<typeof MoveTaskSchema>;
+export type SetPriorityArgs = z.infer<typeof SetPrioritySchema>;
+export type UndoArgs = z.infer<typeof UndoSchema>;
+export type ParseTimeArgs = z.infer<typeof ParseTimeSchema>;
