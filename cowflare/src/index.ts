@@ -55,6 +55,17 @@ interface CachedAuth {
   cachedAt: number;
 }
 
+// Add connection test tool to the tools array
+const connectionTestTool = {
+  name: "test_connection",
+  description: "Test MCP server connection and diagnostics",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    required: []
+  }
+};
+
 /**
  * Generates a unique session ID for a new authentication flow.
  * @returns {string} A UUID.
@@ -98,6 +109,50 @@ async function getPendingAuth(sessionId: string, env: Env): Promise<PendingAuth 
 }
 
 /**
+ * Safely parse JSON from request body with proper error handling
+ */
+async function safeJsonParse(request: Request): Promise<any> {
+  try {
+    const text = await request.text();
+    if (!text || text.trim() === '') {
+      throw new Error('Empty request body');
+    }
+    return JSON.parse(text);
+  } catch (error: any) {
+    console.error('JSON parse error:', error);
+    throw new SyntaxError(`Invalid JSON: ${error.message}`);
+  }
+}
+
+/**
+ * Create a properly formatted JSON-RPC response
+ */
+function createJsonRpcResponse(id: any, result?: any, error?: any): Response {
+  const body: any = {
+    jsonrpc: "2.0",
+    id: id ?? null
+  };
+  
+  if (error) {
+    body.error = error;
+  } else {
+    body.result = result ?? {};
+  }
+  
+  return new Response(JSON.stringify(body), {
+    status: error ? (error.code === 429 ? 429 : 400) : 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Cache-Control": "no-store",
+      "Connection": "keep-alive"
+    }
+  });
+}
+
+/**
  * Validates the arguments for a given tool name against its Zod schema.
  * @param {string} toolName - The name of the tool being called.
  * @param {any} args - The arguments provided for the tool.
@@ -105,6 +160,11 @@ async function getPendingAuth(sessionId: string, env: Env): Promise<PendingAuth 
  * @throws {ValidationError} Throws a validation error if the arguments are invalid.
  */
 function validateToolArgs(toolName: string, args: any): any {
+  // Special case for test_connection which has no required args
+  if (toolName === "test_connection") {
+    return {};
+  }
+  
   try {
     switch (toolName) {
       case "rtm_authenticate": return AuthenticateSchema.parse(args);
@@ -149,6 +209,29 @@ async function handleToolCall(name: string, args: any, env: Env): Promise<{ prot
   
   // Log the incoming request with its new ID.
   console.log(`[${requestId}] [${new Date().toISOString()}] Calling tool: ${name} with args: ${JSON.stringify(args)}`);
+  
+  // Handle connection test tool first
+  if (name === "test_connection") {
+    const testResult = {
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      kv_connected: !!env.AUTH_STORE,
+      env_vars: {
+        rtm_api_key: !!env.RTM_API_KEY,
+        rtm_shared_secret: !!env.RTM_SHARED_SECRET,
+        server_url: !!env.SERVER_URL
+      },
+      worker: {
+        name: "cowflare",
+        version: "1.1.0"
+      }
+    };
+    
+    return {
+      protocol: "test/connection",
+      value: testResult
+    };
+  }
   
   // Validate the incoming arguments against the tool's schema.
   const validatedArgs = validateToolArgs(name, args);
@@ -391,108 +474,214 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-      });
-    }
+    const requestId = crypto.randomUUID().slice(0, 8);
+    const startTime = Date.now();
+    
+    console.log(`[${requestId}] New request: ${request.method} ${request.url}`);
+    console.log(`[${requestId}] Headers:`, Object.fromEntries(request.headers.entries()));
+    
+    try {
+      // Handle preflight CORS requests
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "86400"
+          }
+        });
+      }
 
-    const url = new URL(request.url);
+      const url = new URL(request.url);
+      
+      // Handle special endpoints
+      if (url.pathname === '/auth/callback') {
+        return handleAuthCallback(request, env);
+      }
 
-    if (url.pathname === '/auth/callback') {
-      return handleAuthCallback(request, env);
-    }
+      if (url.pathname === '/health') {
+        return Response.json({
+          status: 'healthy',
+          timestamp: new Date().toISOString(),
+          version: '1.1.0',
+          worker: 'cowflare',
+          kv_namespace: env.AUTH_STORE ? 'connected' : 'missing',
+          environment: {
+            rtm_api_key: !!env.RTM_API_KEY,
+            rtm_shared_secret: !!env.RTM_SHARED_SECRET,
+            server_url: !!env.SERVER_URL
+          }
+        }, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store"
+          }
+        });
+      }
 
-    if (url.pathname === '/health') {
-      return new Response(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }), {
-        headers: { "Content-Type": "application/json" }
-      });
-    }
+      // Default GET response
+      if (request.method !== "POST") {
+        return new Response("RTM MCP Server v1.1.0", {
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "text/plain"
+          }
+        });
+      }
 
-    if (request.method === "POST") {
+      // Handle POST requests (MCP protocol)
       let id = null;
+      let body: any = {};
+      
       try {
+        // Parse request body
+        body = await safeJsonParse(request);
+        id = body.id;
+        
+        console.log(`[${requestId}] Request body:`, JSON.stringify(body));
+        
+        // Validate JSON-RPC structure
+        if (!body.jsonrpc || body.jsonrpc !== "2.0") {
+          throw new ValidationError("Invalid JSON-RPC version");
+        }
+        
+        if (!body.method) {
+          throw new ValidationError("Missing method field");
+        }
+        
+        // Rate limiting with improved client ID detection
         const clientId = request.headers.get('CF-Connecting-IP') || 
-                       request.headers.get('X-Forwarded-For')?.split(',')[0] || 
-                       'anonymous';
+                        request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() || 
+                        request.headers.get('X-Real-IP') ||
+                        'anonymous';
+                        
+        console.log(`[${requestId}] Client ID for rate limiting: ${clientId}`);
+        
         const allowed = await checkRateLimit(clientId, env);
         if (!allowed) {
-          throw new RateLimitError();
-        }
-
-        const body = await request.json();
-        const { method, params } = body;
-        id = body.id;
-
-        if (method === "initialize") {
-          return new Response(JSON.stringify({
-            jsonrpc: "2.0", id, result: { protocolVersion: "2024-11-05", serverInfo: { name: "rtm-mcp-server", version: "1.1.0" }, capabilities: { tools: {} } }
-          }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-        }
-
-        if (method === "tools/list") {
-          return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { tools } }), {
-            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          console.log(`[${requestId}] Rate limit exceeded for client: ${clientId}`);
+          return createJsonRpcResponse(id, null, {
+            code: 429,
+            message: "Rate limit exceeded. Please try again later."
           });
         }
 
-        if (method === "resources/list" || method === "prompts/list") {
-          return new Response(JSON.stringify({ jsonrpc: "2.0", id, result: { resources: [], prompts: [] } }), {
-            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-          });
-        }
+        const { method, params = {} } = body;
 
-        if (method === "tools/call") {
-          const { name, arguments: args } = params;
-          const result = await handleToolCall(name, args, env);
-          
-          return new Response(JSON.stringify({
-            jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result.value, null, 2) }] }
-          }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+        // Handle MCP methods
+        switch (method) {
+          case "initialize":
+            console.log(`[${requestId}] Handling initialize`);
+            return createJsonRpcResponse(id, {
+              protocolVersion: "2024-11-05",
+              serverInfo: {
+                name: "rtm-mcp-server",
+                version: "1.1.0"
+              },
+              capabilities: {
+                tools: {}
+              }
+            });
+
+          case "tools/list":
+            console.log(`[${requestId}] Handling tools/list`);
+            // Include connection test tool with other tools
+            const allTools = [...tools, connectionTestTool];
+            return createJsonRpcResponse(id, { tools: allTools });
+
+          case "resources/list":
+            console.log(`[${requestId}] Handling resources/list`);
+            return createJsonRpcResponse(id, { resources: [] });
+
+          case "prompts/list":
+            console.log(`[${requestId}] Handling prompts/list`);
+            return createJsonRpcResponse(id, { prompts: [] });
+
+          case "tools/call":
+            console.log(`[${requestId}] Handling tools/call for tool: ${params.name}`);
+            if (!params.name) {
+              throw new ValidationError("Missing tool name");
+            }
+            
+            const result = await handleToolCall(params.name, params.arguments || {}, env);
+            return createJsonRpcResponse(id, {
+              content: [{
+                type: "text",
+                text: JSON.stringify(result.value, null, 2)
+              }]
+            });
+
+          default:
+            console.log(`[${requestId}] Unknown method: ${method}`);
+            return createJsonRpcResponse(id, null, {
+              code: -32601,
+              message: `Method not found: ${method}`
+            });
         }
         
-        return new Response(JSON.stringify({
-          jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" }
-        }), { status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-
       } catch (error: any) {
-        console.error(`[FATAL] Request failed:`, error);
+        const duration = Date.now() - startTime;
+        console.error(`[${requestId}] Error handling request after ${duration}ms:`, error);
+        console.error(`[${requestId}] Stack trace:`, error.stack);
         
         let errorCode = -32603;
-        let statusCode = 500;
-        let message = "An internal server error occurred.";
-
-        if (error instanceof RateLimitError) {
-          errorCode = 429;
-          statusCode = 429;
-          message = error.message;
+        let errorMessage = "Internal server error";
+        
+        if (error instanceof SyntaxError) {
+          errorCode = -32700;
+          errorMessage = "Parse error: " + error.message;
         } else if (error instanceof ValidationError) {
           errorCode = -32602;
-          statusCode = 400;
-          message = error.message;
+          errorMessage = "Invalid params: " + error.message;
         } else if (error instanceof RTMAPIError) {
           errorCode = -32000;
-          statusCode = 500;
-          message = error.message;
-        } else if (error instanceof SyntaxError) {
-            errorCode = -32700;
-            statusCode = 400;
-            message = "Invalid JSON was received by the server."
+          errorMessage = "RTM API Error: " + error.message;
+        } else if (error instanceof RateLimitError) {
+          errorCode = 429;
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message || "Unknown error occurred";
         }
         
-        return new Response(JSON.stringify({
-          jsonrpc: "2.0", id, error: { code: errorCode, message }
-        }), { status: statusCode, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+        return createJsonRpcResponse(id, null, {
+          code: errorCode,
+          message: errorMessage,
+          data: {
+            error: error.toString(),
+            type: error.constructor.name,
+            requestId
+          }
+        });
       }
+    } catch (outerError: any) {
+      // This catches any errors that occur before we can parse the request
+      const duration = Date.now() - startTime;
+      console.error(`[${requestId}] Fatal error after ${duration}ms:`, outerError);
+      console.error(`[${requestId}] Stack trace:`, outerError.stack);
+      
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32603,
+          message: `Internal server error: ${outerError.message}`,
+          data: {
+            requestId,
+            error: outerError.toString(),
+            stack: outerError.stack
+          }
+        }
+      }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "X-Request-ID": requestId
+        }
+      });
     }
-
-    return new Response("RTM MCP Server v1.1.0", { 
-      status: 200,
-      headers: { "Access-Control-Allow-Origin": "*" }
-    });
   }
 };
