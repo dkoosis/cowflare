@@ -84,7 +84,7 @@ export async function makeRTMRequest(
   apiKey: string, 
   sharedSecret: string
 ): Promise<any> {
-  const allParams = {
+  const allParams: Record<string, string> = {
     method,
     api_key: apiKey,
     format: 'json',
@@ -97,8 +97,8 @@ export async function makeRTMRequest(
   const signatureBase = sharedSecret + paramString;
   
   const encoder = new TextEncoder();
-  const data = encoder.encode(signatureBase);
-  const hashBuffer = await crypto.subtle.digest('MD5', data);
+  const signatureData = encoder.encode(signatureBase);
+  const hashBuffer = await crypto.subtle.digest('MD5', signatureData);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const apiSig = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   
@@ -116,11 +116,11 @@ export async function makeRTMRequest(
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  const data = await response.json();
+  const responseData = await response.json() as RTMApiResponse;
   
-  if (data.rsp.stat !== 'ok') {
-    throw new Error(`RTM API Error: ${data.rsp.err.msg} (code: ${data.rsp.err.code})`);
+  if (responseData.rsp.stat !== 'ok') {
+    throw new Error(`RTM API Error: ${responseData.rsp.err.msg} (code: ${responseData.rsp.err.code})`);
   }
 
-  return data.rsp;
+  return responseData.rsp;
 }
