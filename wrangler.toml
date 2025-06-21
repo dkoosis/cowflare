@@ -1,39 +1,70 @@
-# wrangler.toml - Configuration for RTM MCP Server
+# RTM MCP Server - Cloudflare Workers Configuration
 
 name = "rtm-mcp-server"
 main = "src/index.ts"
-compatibility_date = "2025-06-19"
+compatibility_date = "2024-06-21"
 compatibility_flags = ["nodejs_compat"]
 
-[observability]
-enabled = true
-
-# KV namespace for storing auth tokens and rate limits
-[[kv_namespaces]]
-binding = "AUTH_STORE"
-id = "7ca3e0b80b9e429488a0be33d7e259fb"
-
-# Environment variables (set these in your Cloudflare dashboard or via wrangler secret)
-# [vars]
-# RTM_API_KEY = "your_rtm_api_key"
-# RTM_SHARED_SECRET = "your_rtm_shared_secret"
-# SERVER_URL = "https://your-worker.workers.dev"
-
-# Development environment
-[env.development]
-name = "rtm-mcp-server-dev"
-vars = { SERVER_URL = "http://localhost:8787" }
-
-# Production environment
-[env.production]
-name = "rtm-mcp-server-prod"
-# vars = { SERVER_URL = "https://rtm-mcp-server.your-domain.workers.dev" }
+# Account and deployment
+account_id = "" # Set via environment or wrangler login
+workers_dev = true
+route = "" # Set custom route if needed
 
 # Build configuration
 [build]
 command = "npm run build"
+watch_paths = ["src/**/*.ts"]
 
-# Triggers (optional - for scheduled tasks)
-# [[triggers.crons]]
-# schedule = "0 */6 * * *"  # Every 6 hours
-# handler = "cleanupExpiredSessions"
+# Node.js compatibility
+node_compat = true
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "AUTH_STORE"
+id = "" # Set via wrangler kv:namespace create AUTH_STORE
+
+[[kv_namespaces]]
+binding = "METRICS_STORE"
+id = "" # Set via wrangler kv:namespace create METRICS_STORE
+
+# Environment variables (set via dashboard or wrangler secret)
+[vars]
+LOG_LEVEL = "info"
+SERVER_URL = "https://rtm-mcp-server.workers.dev"
+
+# Secrets (set via wrangler secret put)
+# RTM_API_KEY = "your_api_key"
+# RTM_SHARED_SECRET = "your_shared_secret"
+
+# Performance and limits
+[limits]
+cpu_ms = 50
+memory_mb = 128
+
+# Observability
+[observability]
+enabled = true
+
+# Development environment
+[env.development]
+name = "rtm-mcp-server-dev"
+vars = { LOG_LEVEL = "debug", SERVER_URL = "http://localhost:8787" }
+
+# Staging environment
+[env.staging]
+name = "rtm-mcp-server-staging"
+vars = { LOG_LEVEL = "info" }
+
+# Production environment
+[env.production]
+name = "rtm-mcp-server"
+vars = { LOG_LEVEL = "warn" }
+
+# Tail consumers for log aggregation (optional)
+# [[tail_consumers]]
+# service = "log-aggregator"
+
+# Durable Objects (if needed for future features)
+# [[durable_objects.bindings]]
+# name = "RATE_LIMITER"
+# class_name = "RateLimiterDO"
