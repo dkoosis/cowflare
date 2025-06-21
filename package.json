@@ -4,10 +4,9 @@
   "description": "Remember The Milk MCP Server for Cloudflare Workers",
   "main": "src/index.ts",
   "type": "module",
-  "scripts": {
+"scripts": {
     "dev": "wrangler dev --local",
     "build": "tsc",
-    "deploy": "wrangler deploy",
     "deploy:dev": "wrangler deploy --env development",
     "deploy:prod": "wrangler deploy --env production",
     "test": "vitest",
@@ -15,7 +14,7 @@
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts"
   },
-  "dependencies": {
+    "dependencies": {
     "@modelcontextprotocol/sdk": "latest",
     "zod": "^3.22.4"
   },
@@ -29,7 +28,7 @@
     "prettier": "^3.3.2",
     "typescript": "^5.4.5",
     "vitest": "1.5.0",
-    "wrangler": "^3.61.0"
+    "wrangler": "^4.20.5"
   },
   "engines": {
     "node": ">=18"

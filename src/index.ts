@@ -3,19 +3,19 @@
  * @description RTM MCP Server for Cloudflare Workers
  */
 
-import { 
+import {
   JSONRPCRequest,
   JSONRPCResponse,
   Tool
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { makeRTMRequest, Env } from './rtm-api.js';
-import { 
-  checkRateLimit, 
-  savePendingAuth, 
-  getPendingAuth, 
-  cacheAuthToken, 
-  getCachedAuthToken 
+import {
+  checkRateLimit,
+  savePendingAuth,
+  getPendingAuth,
+  cacheAuthToken,
+  getCachedAuthToken
 } from './auth.js';
 import { tools as toolDefinitions } from './tools.js';
 import {
@@ -52,20 +52,20 @@ function formatTasks(tasks: any): string {
   let output = "";
   for (const list of tasks.list) {
     if (!list.taskseries || list.taskseries.length === 0) continue;
-    
+
     output += `\n### ${list.id === "0" ? "Inbox" : `List ${list.id}`}\n\n`;
-    
+
     for (const series of list.taskseries) {
       const task = Array.isArray(series.task) ? series.task[0] : series.task;
       const priority = task.priority === "N" ? "" : `!${task.priority} `;
       const due = task.due ? ` (due: ${task.due})` : "";
       const tags = series.tags ? ` #${Array.isArray(series.tags.tag) ? series.tags.tag.join(" #") : series.tags.tag}` : "";
-      
+
       output += `- ${priority}${series.name}${due}${tags}\n`;
       output += `  IDs: list=${list.id}, series=${series.id}, task=${task.id}\n`;
     }
   }
-  
+
   return output || "No tasks found.";
 }
 
@@ -73,11 +73,11 @@ function formatLists(lists: any[]): string {
   if (!lists || lists.length === 0) {
     return "No lists found.";
   }
-  
+
   let output = "## Your RTM Lists\n\n";
   const activeLists = lists.filter(l => l.deleted === "0" && l.archived === "0");
   const archivedLists = lists.filter(l => l.archived === "1");
-  
+
   if (activeLists.length > 0) {
     output += "### Active Lists\n";
     for (const list of activeLists) {
@@ -85,14 +85,14 @@ function formatLists(lists: any[]): string {
       output += `- **${list.name}**${smart} - ID: ${list.id}\n`;
     }
   }
-  
+
   if (archivedLists.length > 0) {
     output += "\n### Archived Lists\n";
     for (const list of archivedLists) {
       output += `- ${list.name} - ID: ${list.id}\n`;
     }
   }
-  
+
   return output;
 }
 
@@ -130,18 +130,18 @@ function validateToolArgs(toolName: string, args: any): any {
 }
 
 // Execute tool call
-async function executeToolCall(name: string, args: any, env: Env): Promise<{ content: any[] }> {
+async function executeToolCall(name: string, args: any, env: Env): Promise<{ content: any[]; isError?: boolean }> {
   const requestId = crypto.randomUUID().slice(0, 8);
-  
+
   // Log request
   const sanitizedArgs = { ...args };
   if (sanitizedArgs.auth_token) sanitizedArgs.auth_token = "[REDACTED]";
   console.log(`[${requestId}] [${new Date().toISOString()}] Tool: ${name}`, sanitizedArgs);
-  
+
   try {
     // Validate arguments
     const validatedArgs = validateToolArgs(name, args);
-    
+
     // Execute tool
     switch (name) {
       case "test_connection": {
@@ -152,11 +152,11 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_authenticate": {
         const sessionId = generateSessionId();
         const cached = await getCachedAuthToken(sessionId, env);
-        
+
         if (cached) {
           return {
             content: [{
@@ -165,32 +165,32 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
             }]
           };
         }
-        
+
         const frobResponse = await makeRTMRequest('rtm.auth.getFrob', {}, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
         const frob = frobResponse.frob;
-        
+
         await savePendingAuth(sessionId, frob, env);
-        
+
         const authParams: Record<string, string> = {
           api_key: env.RTM_API_KEY,
           perms: 'write',
           frob: frob
         };
-        
+
         // Generate proper MD5 signature
         const sortedKeys = Object.keys(authParams).sort();
         const paramString = sortedKeys.map(key => `${key}${authParams[key]}`).join('');
         const signatureBase = env.RTM_SHARED_SECRET + paramString;
-        
+
         const encoder = new TextEncoder();
         const data = encoder.encode(signatureBase);
         const hashBuffer = await crypto.subtle.digest('MD5', data);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         authParams.api_sig = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        
+
         const callbackUrl = `${env.SERVER_URL}/auth/callback?session=${sessionId}`;
         const authUrl = `https://www.rememberthemilk.com/services/auth/?${new URLSearchParams(authParams)}&redirect=${encodeURIComponent(callbackUrl)}`;
-        
+
         return {
           content: [{
             type: "text",
@@ -198,11 +198,11 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_complete_auth": {
         const sessionId = validatedArgs.session_id;
         const pending = await getPendingAuth(sessionId, env);
-        
+
         if (!pending) {
           return {
             content: [{
@@ -211,13 +211,13 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
             }]
           };
         }
-        
+
         try {
           const response = await makeRTMRequest('rtm.auth.getToken', { frob: pending.frob }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-          
+
           await cacheAuthToken(sessionId, response.auth, env);
           await env.AUTH_STORE.delete(`pending:${sessionId}`);
-          
+
           return {
             content: [{
               type: "text",
@@ -233,14 +233,14 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           };
         }
       }
-      
+
       case "rtm_create_timeline": {
-        const response = await makeRTMRequest('rtm.timelines.create', 
-          { auth_token: validatedArgs.auth_token }, 
-          env.RTM_API_KEY, 
+        const response = await makeRTMRequest('rtm.timelines.create',
+          { auth_token: validatedArgs.auth_token },
+          env.RTM_API_KEY,
           env.RTM_SHARED_SECRET
         );
-        
+
         return {
           content: [{
             type: "text",
@@ -248,14 +248,14 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_get_lists": {
-        const response = await makeRTMRequest('rtm.lists.getList', 
-          { auth_token: validatedArgs.auth_token }, 
-          env.RTM_API_KEY, 
+        const response = await makeRTMRequest('rtm.lists.getList',
+          { auth_token: validatedArgs.auth_token },
+          env.RTM_API_KEY,
           env.RTM_SHARED_SECRET
         );
-        
+
         return {
           content: [{
             type: "text",
@@ -263,7 +263,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_add_list": {
         const params: Record<string, string> = {
           auth_token: validatedArgs.auth_token,
@@ -271,9 +271,9 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           name: validatedArgs.name
         };
         if (validatedArgs.filter) params.filter = validatedArgs.filter;
-        
+
         const response = await makeRTMRequest('rtm.lists.add', params, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -281,13 +281,13 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_get_tasks":
       case "rtm_get_tasks_from_list": {
         const taskParams: Record<string, string> = { auth_token: validatedArgs.auth_token };
         if (validatedArgs.list_id) taskParams.list_id = validatedArgs.list_id;
         if (validatedArgs.filter) taskParams.filter = validatedArgs.filter;
-        
+
         const response = await makeRTMRequest('rtm.tasks.getList', taskParams, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
         return {
           content: [{
@@ -296,7 +296,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_add_task": {
         const params: Record<string, string> = {
           auth_token: validatedArgs.auth_token,
@@ -305,13 +305,13 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           parse: "1" // Enable Smart Add
         };
         if (validatedArgs.list_id) params.list_id = validatedArgs.list_id;
-        
+
         const response = await makeRTMRequest('rtm.tasks.add', params, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         const list = response.list;
         const series = list.taskseries[0];
         const task = series.task[0];
-        
+
         return {
           content: [{
             type: "text",
@@ -319,7 +319,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_complete_task": {
         const response = await makeRTMRequest('rtm.tasks.complete', {
           auth_token: validatedArgs.auth_token,
@@ -328,7 +328,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           taskseries_id: validatedArgs.taskseries_id,
           task_id: validatedArgs.task_id
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -336,7 +336,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_delete_task": {
         const response = await makeRTMRequest('rtm.tasks.delete', {
           auth_token: validatedArgs.auth_token,
@@ -345,7 +345,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           taskseries_id: validatedArgs.taskseries_id,
           task_id: validatedArgs.task_id
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -353,7 +353,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_set_due_date": {
         const params: Record<string, string> = {
           auth_token: validatedArgs.auth_token,
@@ -362,21 +362,21 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           taskseries_id: validatedArgs.taskseries_id,
           task_id: validatedArgs.task_id
         };
-        
+
         if (validatedArgs.due) {
           params.due = validatedArgs.due;
         } else {
           params.due = "";
         }
-        
+
         if (validatedArgs.has_due_time !== undefined) {
           params.has_due_time = validatedArgs.has_due_time;
         }
-        
+
         params.parse = "1"; // Enable natural language parsing
-        
+
         const response = await makeRTMRequest('rtm.tasks.setDueDate', params, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -384,7 +384,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_add_tags": {
         const response = await makeRTMRequest('rtm.tasks.addTags', {
           auth_token: validatedArgs.auth_token,
@@ -394,7 +394,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           task_id: validatedArgs.task_id,
           tags: validatedArgs.tags
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -402,7 +402,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_move_task": {
         const response = await makeRTMRequest('rtm.tasks.moveTo', {
           auth_token: validatedArgs.auth_token,
@@ -412,7 +412,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           taskseries_id: validatedArgs.taskseries_id,
           task_id: validatedArgs.task_id
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -420,7 +420,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_set_priority": {
         const response = await makeRTMRequest('rtm.tasks.setPriority', {
           auth_token: validatedArgs.auth_token,
@@ -430,9 +430,9 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           task_id: validatedArgs.task_id,
           priority: validatedArgs.priority
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         const priorityText = validatedArgs.priority === "N" ? "None" : `Priority ${validatedArgs.priority}`;
-        
+
         return {
           content: [{
             type: "text",
@@ -440,14 +440,14 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_undo": {
         const response = await makeRTMRequest('rtm.transactions.undo', {
           auth_token: validatedArgs.auth_token,
           timeline: validatedArgs.timeline,
           transaction_id: validatedArgs.transaction_id
         }, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -455,15 +455,15 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       case "rtm_parse_time": {
         const params: Record<string, string> = {
           text: validatedArgs.text
         };
         if (validatedArgs.timezone) params.timezone = validatedArgs.timezone;
-        
+
         const response = await makeRTMRequest('rtm.time.parse', params, env.RTM_API_KEY, env.RTM_SHARED_SECRET);
-        
+
         return {
           content: [{
             type: "text",
@@ -471,14 +471,14 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
           }]
         };
       }
-      
+
       default:
         throw new ValidationError(`Unknown tool: ${name}`);
     }
-    
+
   } catch (error: any) {
     console.error(`[${requestId}] Tool error:`, error.message);
-    
+
     let errorMessage = "An unexpected error occurred.";
     if (error instanceof RTMAPIError) {
       errorMessage = `Remember The Milk Error: ${error.message}`;
@@ -488,7 +488,7 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
     } else if (error instanceof RateLimitError) {
       errorMessage = "Rate limit exceeded. Please wait a moment.";
     }
-    
+
     return {
       content: [{
         type: "text",
@@ -503,14 +503,14 @@ async function executeToolCall(name: string, args: any, env: Env): Promise<{ con
 async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json() as JSONRPCRequest;
-    
+
     // Validate JSON-RPC request
     if (!body.jsonrpc || body.jsonrpc !== "2.0" || !body.method) {
       return createErrorResponse(body.id || null, -32600, "Invalid Request");
     }
-    
+
     let result: any;
-    
+
     // Route based on method
     switch (body.method) {
       case "initialize": {
@@ -528,7 +528,7 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
         };
         break;
       }
-      
+
       case "tools/list": {
         const connectionTestTool: Tool = {
           name: "test_connection",
@@ -544,7 +544,7 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
         };
         break;
       }
-      
+
       case "resources/list": {
         result = {
           resources: [
@@ -555,14 +555,14 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
               mimeType: "application/json"
             },
             {
-              uri: "rtm://lists-summary", 
+              uri: "rtm://lists-summary",
               name: "rtm/lists-summary",
               description: "Summary of all lists",
               mimeType: "application/json"
             },
             {
               uri: "rtm://tags-summary",
-              name: "rtm/tags-summary", 
+              name: "rtm/tags-summary",
               description: "All available tags",
               mimeType: "application/json"
             }
@@ -570,7 +570,7 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
         };
         break;
       }
-      
+
       case "prompts/list": {
         result = {
           prompts: [
@@ -616,25 +616,25 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
         };
         break;
       }
-      
+
       case "tools/call": {
         const params = body.params as any;
         result = await executeToolCall(params.name, params.arguments || {}, env);
         break;
       }
-      
+
       default: {
         return createErrorResponse(body.id, -32601, `Method not found: ${body.method}`);
       }
     }
-    
+
     // Create success response
     const response: JSONRPCResponse = {
       jsonrpc: "2.0",
-      id: body.id || null,
+      id: body.id!,
       result: result || {}
     };
-    
+
     return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
@@ -643,7 +643,7 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
         "Cache-Control": "no-store"
       }
     });
-    
+
   } catch (error: any) {
     console.error("MCP request handling error:", error);
     return createErrorResponse(null, -32603, error.message || "Internal error");
@@ -651,54 +651,55 @@ async function handleMcpRequest(request: Request, env: Env): Promise<Response> {
 }
 
 function createErrorResponse(id: any, code: number, message: string): Response {
-  const errorResponse: JSONRPCResponse = {
+  const errorResponse = {
     jsonrpc: "2.0",
     id,
     error: {
       code,
-      message
-    }
+      message,
+    },
   };
-  
-  return new Response(JSON.stringify(errorResponse), {
-    status: 200,
+
+  return new Response(JSON.stringify(errorResponse as any), {
+    status: 200, // JSON-RPC errors should still have a 200 OK status
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-store"
-    }
+      "Cache-Control": "no-store",
+    },
   });
 }
+
 
 // OAuth callback handler
 async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get('session');
-  
+
   if (!sessionId) {
     return new Response('Invalid request: Missing session ID', { status: 400 });
   }
-  
+
   try {
     const pending = await getPendingAuth(sessionId, env);
-    
+
     if (!pending) {
       return new Response('Session expired or invalid', { status: 400 });
     }
-    
+
     // Try to get the token
-    const response = await makeRTMRequest('rtm.auth.getToken', 
-      { frob: pending.frob }, 
-      env.RTM_API_KEY, 
+    const response = await makeRTMRequest('rtm.auth.getToken',
+      { frob: pending.frob },
+      env.RTM_API_KEY,
       env.RTM_SHARED_SECRET
     );
-    
+
     // Cache the token
     await cacheAuthToken(sessionId, response.auth, env);
-    
+
     // Clean up pending auth
     await env.AUTH_STORE.delete(`pending:${sessionId}`);
-    
+
     // Return success page
     const html = `
       <!DOCTYPE html>
@@ -749,11 +750,11 @@ async function handleAuthCallback(request: Request, env: Env): Promise<Response>
         </body>
       </html>
     `;
-    
+
     return new Response(html, {
       headers: { 'Content-Type': 'text/html' }
     });
-    
+
   } catch (error: any) {
     console.error('OAuth callback error:', error);
     return new Response(`Authentication failed: ${error.message}`, { status: 500 });
@@ -776,14 +777,14 @@ export default {
           }
         });
       }
-      
+
       const url = new URL(request.url);
-      
+
       // Handle OAuth callback
       if (url.pathname === '/auth/callback') {
         return handleAuthCallback(request, env);
       }
-      
+
       // Handle health check
       if (url.pathname === '/health') {
         return Response.json({
@@ -799,7 +800,7 @@ export default {
           }
         });
       }
-      
+
       // Handle GET requests to root
       if (request.method === "GET" && url.pathname === "/") {
         return new Response("RTM MCP Server v2.0.0 (SDK Version)", {
@@ -809,13 +810,13 @@ export default {
           }
         });
       }
-      
+
       // Apply rate limiting for POST requests
       if (request.method === "POST") {
-        const clientId = request.headers.get('CF-Connecting-IP') || 
-                        request.headers.get('X-Forwarded-For')?.split(',')[0] || 
+        const clientId = request.headers.get('CF-Connecting-IP') ||
+                        request.headers.get('X-Forwarded-For')?.split(',')[0] ||
                         'anonymous';
-        
+
         const allowed = await checkRateLimit(clientId, env);
         if (!allowed) {
           return Response.json({
@@ -835,10 +836,10 @@ export default {
           });
         }
       }
-      
+
       // Pass MCP protocol requests to our handler
       return handleMcpRequest(request, env);
-      
+
     } catch (error: any) {
       console.error("Unexpected error:", error);
       return Response.json({
