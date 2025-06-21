@@ -1,7 +1,9 @@
-// src/auth.ts - Authentication and rate limiting utilities
+/**
+ * @file auth.ts
+ * @description Authentication and rate limiting utilities
+ */
 
 import { Env } from "./rtm-api.js";
-import { RateLimitError } from "./validation.js";
 
 // Type definitions for stored data
 export interface PendingAuth {
@@ -33,7 +35,6 @@ const CACHED_AUTH_TTL = 86400; // 24 hours
 /**
  * Enhanced rate limiting with improved client identification
  * @param request - The incoming request
- * @param env - Cloudflare environment
  * @returns Client identifier string
  */
 export function getClientId(request: Request): string {
@@ -77,7 +78,7 @@ export async function checkRateLimit(clientId: string, env: Env): Promise<boolea
       resetAt: data.resetAt
     }), {
       expirationTtl: Math.ceil((data.resetAt - now) / 1000)
-      });
+    });
     
     return true;
   } catch (error) {
@@ -176,6 +177,77 @@ export async function deletePendingAuth(sessionId: string, env: Env): Promise<vo
 }
 
 /**
+ * Handles OAuth callback from Remember The Milk
+ */
+export async function handleAuthCallback(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get('session');
+
+  if (!sessionId) {
+    return createErrorPage(
+      'Invalid Request',
+      'Missing session ID in callback URL.'
+    );
+  }
+
+  try {
+    const pending = await getPendingAuth(sessionId, env);
+    if (!pending) {
+      return createErrorPage(
+        'Session Expired',
+        'Your authentication session has expired. Please start over.'
+      );
+    }
+
+    // Import makeRTMRequest dynamically to avoid circular dependency
+    const { makeRTMRequest } = await import('./rtm-api.js');
+    
+    try {
+      const response = await makeRTMRequest(
+        'rtm.auth.getToken',
+        { frob: pending.frob },
+        env.RTM_API_KEY,
+        env.RTM_SHARED_SECRET
+      );
+
+      await cacheAuthToken(sessionId, response.auth, env);
+      await env.AUTH_STORE.delete(`pending:${sessionId}`);
+
+      return createSuccessPage(
+        response.auth.user.fullname,
+        sessionId
+      );
+
+    } catch (apiError: any) {
+      if (apiError.message.includes('Invalid frob') || 
+          apiError.message.includes('frob is not valid')) {
+        return createErrorPage(
+          'Authorization Pending',
+          'The authorization is not complete yet. Please make sure you clicked "Authorize" on the RTM page.',
+          sessionId
+        );
+      }
+
+      return createErrorPage(
+        'Authentication Failed',
+        `Unable to complete authentication: ${apiError.message}`
+      );
+    }
+
+  } catch (error: any) {
+    console.error('OAuth callback error:', error);
+    
+    return createErrorPage(
+      'Unexpected Error',
+      'An unexpected error occurred during authentication.'
+    );
+  }
+}
+
+/**
  * Authentication manager class for more complex auth operations
  */
 export class AuthManager {
@@ -211,4 +283,249 @@ export class AuthManager {
       this.env.AUTH_STORE.delete(`pending:${sessionId}`)
     ]);
   }
+}
+
+/**
+ * Creates a success page for OAuth callback
+ */
+function createSuccessPage(
+  fullname: string,
+  sessionId: string
+): Response {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Authentication Successful - RTM MCP Server</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+          }
+          .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 48px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+          }
+          .icon {
+            width: 80px;
+            height: 80px;
+            background: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+          }
+          h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 16px;
+          }
+          .welcome {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 32px;
+          }
+          .session-box {
+            background: #f5f5f5;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 24px 0;
+          }
+          .session-label {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 8px;
+          }
+          .session-id {
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            color: #333;
+            word-break: break-all;
+            user-select: all;
+          }
+          .instructions {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-top: 24px;
+          }
+          .code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="icon">✓</div>
+          <h1>Authentication Successful!</h1>
+          <p class="welcome">Welcome, <strong>${escapeHtml(fullname)}</strong>!</p>
+          
+          <div class="session-box">
+            <div class="session-label">Your Session ID:</div>
+            <div class="session-id">${escapeHtml(sessionId)}</div>
+          </div>
+          
+          <div class="instructions">
+            <p>You can now close this window and return to your application.</p>
+            <p style="margin-top: 16px;">
+              To complete the setup, use <span class="code">rtm_complete_auth</span> 
+              with the session ID above.
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
+
+/**
+ * Creates an error page for OAuth callback
+ */
+function createErrorPage(
+  title: string,
+  message: string,
+  sessionId?: string
+): Response {
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${escapeHtml(title)} - RTM MCP Server</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ee7752 0%, #e73c7e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+          }
+          .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 48px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+          }
+          .icon {
+            width: 80px;
+            height: 80px;
+            background: #f44336;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+          }
+          h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 16px;
+          }
+          .message {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+          }
+          .session-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+            color: #856404;
+            font-size: 14px;
+          }
+          .code {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="icon">✕</div>
+          <h1>${escapeHtml(title)}</h1>
+          <p class="message">${escapeHtml(message)}</p>
+          
+          ${sessionId ? `
+            <div class="session-info">
+              <strong>Session ID:</strong> <span class="code">${escapeHtml(sessionId)}</span>
+              <br><br>
+              Please try running <span class="code">rtm_complete_auth</span> again in a moment.
+            </div>
+          ` : ''}
+        </div>
+      </body>
+    </html>
+  `;
+
+  return new Response(html, {
+    status: 400,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+  });
+}
+
+/**
+ * Escapes HTML to prevent XSS
+ */
+function escapeHtml(str: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+  
+  return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
 }

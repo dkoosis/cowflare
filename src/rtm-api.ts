@@ -244,7 +244,50 @@ export function formatLists(lists: RTMList[]): string {
 }
 
 /**
- * Formats tasks for display
+ * Formats a due date for display with better date handling
+ */
+function formatDueDate(dueDate: string | undefined): string {
+  if (!dueDate) return "";
+  
+  try {
+    const date = new Date(dueDate);
+    if (isNaN(date.getTime())) {
+      // Invalid date, return as-is
+      return dueDate;
+    }
+    
+    const now = new Date();
+    // Reset time parts for date-only comparison
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    // Calculate difference in days
+    const diffTime = compareDate.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return "today";
+    } else if (diffDays === 1) {
+      return "tomorrow";
+    } else if (diffDays === -1) {
+      return "yesterday";
+    } else if (diffDays > 0 && diffDays <= 7) {
+      // Next week - show day name
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return `${dayNames[date.getDay()]} (${date.toLocaleDateString()})`;
+    } else if (diffDays < 0) {
+      return `overdue (${date.toLocaleDateString()})`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  } catch (error) {
+    // Fallback for any parsing errors
+    return dueDate;
+  }
+}
+
+/**
+ * Formats tasks for display with improved structure
  */
 export function formatTasks(tasks: RTMGetTasksResponse['tasks']): string {
   if (!tasks.list || tasks.list.length === 0) {
@@ -252,27 +295,74 @@ export function formatTasks(tasks: RTMGetTasksResponse['tasks']): string {
   }
 
   let output = "";
+  let totalTasks = 0;
+  let overdueTasks = 0;
+  
   for (const list of tasks.list) {
     if (!list.taskseries || list.taskseries.length === 0) continue;
 
-    output += `\n### ${list.id === "0" ? "Inbox" : `List ${list.id}`}\n\n`;
+    const listName = list.id === "0" ? "Inbox" : `List ${list.id}`;
+    const taskCount = list.taskseries.length;
+    output += `\n### ${listName} (${taskCount} task${taskCount !== 1 ? 's' : ''})\n\n`;
 
     for (const series of list.taskseries) {
       const taskArray = Array.isArray(series.task) ? series.task : [series.task];
       const task = taskArray[0];
       
-      const priority = task.priority === "N" ? "" : `!${task.priority} `;
-      const due = task.due ? ` (due: ${task.due})` : "";
+      // Skip completed or deleted tasks
+      if (task.completed || task.deleted) continue;
       
+      totalTasks++;
+      
+      // Format priority with color indicators for better visual scanning
+      const prioritySymbols: Record<string, string> = {
+        "1": "🔴", // High (red for urgency)
+        "2": "🟡", // Medium (yellow for caution)
+        "3": "🔵", // Low (blue for calm)
+        "N": ""    // None
+      };
+      const priority = prioritySymbols[task.priority] || "";
+      
+      // Format due date
+      const dueFormatted = task.due ? formatDueDate(task.due) : "";
+      const dueText = dueFormatted ? ` (due: ${dueFormatted})` : "";
+      
+      // Check if overdue
+      if (task.due && new Date(task.due) < new Date()) {
+        overdueTasks++;
+      }
+      
+      // Format tags
       let tags = "";
       if (series.tags) {
         const tagArray = Array.isArray(series.tags.tag) ? series.tags.tag : [series.tags.tag];
-        tags = ` #${tagArray.join(" #")}`;
+        if (tagArray.length > 0 && tagArray[0]) { // Check for non-empty tags
+          tags = ` #${tagArray.join(" #")}`;
+        }
       }
 
-      output += `- ${priority}${series.name}${due}${tags}\n`;
+      output += `- ${priority} ${series.name}${dueText}${tags}\n`;
       output += `  IDs: list=${list.id}, series=${series.id}, task=${task.id}\n`;
+      
+      // Include task notes if present
+      if (series.notes && series.notes.note) {
+        const notes = Array.isArray(series.notes.note) ? series.notes.note : [series.notes.note];
+        for (const note of notes) {
+          if (note.$t) {
+            output += `  📝 ${note.$t}\n`;
+          }
+        }
+      }
     }
+  }
+
+  // Add summary at the top
+  if (totalTasks > 0) {
+    let summary = `📊 Summary: ${totalTasks} active task${totalTasks !== 1 ? 's' : ''}`;
+    if (overdueTasks > 0) {
+      summary += ` (⚠️ ${overdueTasks} overdue)`;
+    }
+    output = summary + "\n" + output;
   }
 
   return output || "No tasks found.";
