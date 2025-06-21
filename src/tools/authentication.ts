@@ -43,9 +43,11 @@ export class AuthenticationTools extends ToolBase {
     server.registerTool(
       "rtm_authenticate",
       {
-        title: "Start RTM Authentication",
-        description: "Initiates Remember The Milk OAuth authentication flow",
-        readOnlyHint: true,
+        annotations: {
+          title: "Start RTM Authentication",
+          description: "Initiates Remember The Milk OAuth authentication flow",
+          readOnlyHint: true,
+        },
         inputSchema: {
           type: "object",
           properties: {},
@@ -88,9 +90,11 @@ export class AuthenticationTools extends ToolBase {
     server.registerTool(
       "rtm_complete_auth",
       {
-        title: "Complete RTM Authentication",
-        description: "Completes the OAuth flow after user authorization",
-        readOnlyHint: false,
+        annotations: {
+          title: "Complete RTM Authentication",
+          description: "Completes the OAuth flow after user authorization",
+          readOnlyHint: false,
+        },
         inputSchema: {
           type: "object",
           properties: {
@@ -140,9 +144,11 @@ export class AuthenticationTools extends ToolBase {
     server.registerTool(
       "rtm_check_auth_status",
       {
-        title: "Check Authentication Status",
-        description: "Verifies current authentication status",
-        readOnlyHint: true,
+        annotations: {
+          title: "Check Authentication Status",
+          description: "Verifies current authentication status",
+          readOnlyHint: true,
+        },
         inputSchema: {
           type: "object",
           properties: {

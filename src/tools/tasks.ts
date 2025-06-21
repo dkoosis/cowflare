@@ -110,9 +110,11 @@ export function registerTaskTools(
   server.registerTool(
     "rtm_get_tasks",
     {
-      title: "Get Tasks",
-      description: "Retrieves tasks from Remember The Milk, optionally filtered by list or search criteria.",
-      readOnlyHint: true,
+      annotations: {
+        title: "Get Tasks",
+        description: "Retrieves tasks from Remember The Milk, optionally filtered by list or search criteria.",
+        readOnlyHint: true,
+      },
       inputSchema: {
         type: "object",
         properties: {
@@ -201,9 +203,11 @@ export function registerTaskTools(
   server.registerTool(
     "rtm_add_task",
     {
-      title: "Add New Task",
-      description: "Creates a new task with Smart Add support for natural language input.",
-      readOnlyHint: false,
+      annotations: {
+        title: "Add New Task",
+        description: "Creates a new task with Smart Add support for natural language input.",
+        readOnlyHint: false,
+      },
       inputSchema: {
         type: "object",
         properties: {
@@ -298,9 +302,11 @@ export function registerTaskTools(
   server.registerTool(
     "rtm_complete_task",
     {
-      title: "Complete Task",
-      description: "Marks a task as completed in Remember The Milk.",
-      readOnlyHint: false,
+      annotations: {
+        title: "Complete Task",
+        description: "Marks a task as completed in Remember The Milk.",
+        readOnlyHint: false,
+      },
       inputSchema: {
         type: "object",
         properties: {
@@ -387,9 +393,11 @@ export function registerTaskTools(
   server.registerTool(
     "rtm_delete_task",
     {
-      title: "Delete Task",
-      description: "Permanently deletes a task from Remember The Milk.",
-      readOnlyHint: false,
+      annotations: {
+        title: "Delete Task",
+        description: "Permanently deletes a task from Remember The Milk.",
+        readOnlyHint: false,
+      },
       inputSchema: {
         type: "object",
         properties: {
@@ -476,9 +484,11 @@ export function registerTaskTools(
   server.registerTool(
     "rtm_set_due_date",
     {
-      title: "Set Task Due Date",
-      description: "Sets or updates the due date for a task.",
-      readOnlyHint: false,
+      annotations: {
+        title: "Set Task Due Date",
+        description: "Sets or updates the due date for a task.",
+        readOnlyHint: false,
+      },
       inputSchema: {
         type: "object",
         properties: {
