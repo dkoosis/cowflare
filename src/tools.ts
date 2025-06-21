@@ -1,7 +1,12 @@
+// src/tools.ts
+// Enhanced tool definitions with titles, descriptions, and readOnlyHint
+
 export const tools = [
   {
     name: "rtm_authenticate",
-    description: "Start RTM authentication setup",
+    title: "Start RTM Authentication",
+    description: "Initiates Remember The Milk authentication flow. Returns an auth URL for user authorization.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {},
@@ -10,13 +15,15 @@ export const tools = [
   },
   {
     name: "rtm_complete_auth",
-    description: "Complete authentication after authorizing on RTM",
+    title: "Complete RTM Authentication",
+    description: "Completes the authentication process after user authorizes the app on Remember The Milk.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         session_id: {
           type: "string",
-          description: "Session ID from authentication setup"
+          description: "The session ID received from the initial authentication setup"
         }
       },
       required: ["session_id"]
@@ -24,13 +31,15 @@ export const tools = [
   },
   {
     name: "rtm_check_auth_status",
-    description: "Check if authentication was completed",
+    title: "Check Authentication Status",
+    description: "Verifies if the authentication process was completed successfully.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         session_id: {
           type: "string",
-          description: "Session ID from authentication"
+          description: "The session ID to check authentication status for"
         }
       },
       required: ["session_id"]
@@ -38,13 +47,15 @@ export const tools = [
   },
   {
     name: "rtm_create_timeline",
-    description: "Create a new timeline for undoable operations",
+    title: "Create Timeline",
+    description: "Creates a timeline for making undoable changes to tasks and lists.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         }
       },
       required: ["auth_token"]
@@ -52,13 +63,15 @@ export const tools = [
   },
   {
     name: "rtm_get_lists",
-    description: "Retrieve all lists",
+    title: "Get RTM Lists",
+    description: "Retrieves all task lists from your Remember The Milk account.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         }
       },
       required: ["auth_token"]
@@ -66,25 +79,27 @@ export const tools = [
   },
   {
     name: "rtm_add_list",
-    description: "Create a new list",
+    title: "Create New List",
+    description: "Creates a new task list in Remember The Milk.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         name: {
           type: "string",
-          description: "List name"
+          description: "Name for the new list"
         },
         filter: {
           type: "string",
-          description: "Smart list filter (optional)"
+          description: "Smart list filter criteria (optional, creates a Smart List)"
         }
       },
       required: ["auth_token", "timeline", "name"]
@@ -92,47 +107,71 @@ export const tools = [
   },
   {
     name: "rtm_get_tasks",
-    description: "Retrieve tasks from a list",
+    title: "Get Tasks",
+    description: "Retrieves tasks from Remember The Milk, optionally filtered by list or search criteria.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         list_id: {
           type: "string",
-          description: "List ID (optional)"
+          description: "ID of a specific list to retrieve tasks from (optional)"
         },
         filter: {
           type: "string",
-          description: "RTM search filter (optional)"
+          description: "RTM search filter (e.g., 'due:today', 'tag:important') (optional)"
         }
       },
       required: ["auth_token"]
     }
   },
   {
-    name: "rtm_add_task",
-    description: "Add a new task with Smart Add support",
+    name: "rtm_get_tasks_from_list",
+    title: "Get Tasks from Specific List",
+    description: "Retrieves all tasks from a specific RTM list by list ID.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
-        },
-        timeline: {
-          type: "string",
-          description: "Timeline ID"
-        },
-        name: {
-          type: "string",
-          description: "Task name (supports Smart Add syntax)"
+          description: "Your Remember The Milk authentication token"
         },
         list_id: {
           type: "string",
-          description: "List ID (optional)"
+          description: "ID of the list to retrieve tasks from"
+        }
+      },
+      required: ["auth_token", "list_id"]
+    }
+  },
+  {
+    name: "rtm_add_task",
+    title: "Add New Task",
+    description: "Creates a new task with Smart Add support for natural language input.",
+    readOnlyHint: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        auth_token: {
+          type: "string",
+          description: "Your Remember The Milk authentication token"
+        },
+        timeline: {
+          type: "string",
+          description: "Timeline ID for undoable operations"
+        },
+        name: {
+          type: "string",
+          description: "Task description (supports Smart Add: 'Buy milk tomorrow at 3pm #shopping !2')"
+        },
+        list_id: {
+          type: "string",
+          description: "ID of the list to add the task to (optional, defaults to Inbox)"
         }
       },
       required: ["auth_token", "timeline", "name"]
@@ -140,21 +179,23 @@ export const tools = [
   },
   {
     name: "rtm_complete_task",
-    description: "Mark a task as completed",
+    title: "Complete Task",
+    description: "Marks a task as completed in Remember The Milk.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         list_id: {
           type: "string",
-          description: "List ID"
+          description: "ID of the list containing the task"
         },
         taskseries_id: {
           type: "string",
@@ -162,7 +203,7 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         }
       },
       required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
@@ -170,21 +211,23 @@ export const tools = [
   },
   {
     name: "rtm_delete_task",
-    description: "Delete a task",
+    title: "Delete Task",
+    description: "Permanently deletes a task from Remember The Milk.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         list_id: {
           type: "string",
-          description: "List ID"
+          description: "ID of the list containing the task"
         },
         taskseries_id: {
           type: "string",
@@ -192,7 +235,7 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         }
       },
       required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
@@ -200,21 +243,23 @@ export const tools = [
   },
   {
     name: "rtm_set_due_date",
-    description: "Set or clear task due date",
+    title: "Set Task Due Date",
+    description: "Sets or updates the due date for a task.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         list_id: {
           type: "string",
-          description: "List ID"
+          description: "ID of the list containing the task"
         },
         taskseries_id: {
           type: "string",
@@ -222,16 +267,16 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         },
         due: {
           type: "string",
-          description: "Due date/time (ISO format or RTM natural language)"
+          description: "Due date in ISO format (YYYY-MM-DD) or RTM natural language (e.g., 'tomorrow', 'next Friday')"
         },
         has_due_time: {
           type: "string",
           enum: ["0", "1"],
-          description: "Whether time is specified (0=date only, 1=date+time)"
+          description: "Whether the due date includes a specific time (0=date only, 1=date and time)"
         }
       },
       required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id"]
@@ -239,21 +284,23 @@ export const tools = [
   },
   {
     name: "rtm_add_tags",
-    description: "Add tags to a task",
+    title: "Add Tags to Task",
+    description: "Adds one or more tags to an existing task.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         list_id: {
           type: "string",
-          description: "List ID"
+          description: "ID of the list containing the task"
         },
         taskseries_id: {
           type: "string",
@@ -261,11 +308,11 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         },
         tags: {
           type: "string",
-          description: "Comma-separated list of tags to add"
+          description: "Comma-separated list of tags to add (e.g., 'urgent,work,followup')"
         }
       },
       required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id", "tags"]
@@ -273,25 +320,27 @@ export const tools = [
   },
   {
     name: "rtm_move_task",
-    description: "Move task to another list",
+    title: "Move Task to Another List",
+    description: "Moves a task from one list to another.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         from_list_id: {
           type: "string",
-          description: "Source list ID"
+          description: "ID of the current list containing the task"
         },
         to_list_id: {
           type: "string",
-          description: "Destination list ID"
+          description: "ID of the destination list"
         },
         taskseries_id: {
           type: "string",
@@ -299,7 +348,7 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         }
       },
       required: ["auth_token", "timeline", "from_list_id", "to_list_id", "taskseries_id", "task_id"]
@@ -307,21 +356,23 @@ export const tools = [
   },
   {
     name: "rtm_set_priority",
-    description: "Set task priority",
+    title: "Set Task Priority",
+    description: "Sets the priority level for a task.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID for undoable operations"
         },
         list_id: {
           type: "string",
-          description: "List ID"
+          description: "ID of the list containing the task"
         },
         taskseries_id: {
           type: "string",
@@ -329,12 +380,12 @@ export const tools = [
         },
         task_id: {
           type: "string",
-          description: "Task ID"
+          description: "Specific task ID within the series"
         },
         priority: {
           type: "string",
-          enum: ["1", "2", "3", "N"],
-          description: "Priority (1=High, 2=Medium, 3=Low, N=None)"
+          enum: ["N", "1", "2", "3"],
+          description: "Priority level: N=None, 1=High, 2=Medium, 3=Low"
         }
       },
       required: ["auth_token", "timeline", "list_id", "taskseries_id", "task_id", "priority"]
@@ -342,21 +393,23 @@ export const tools = [
   },
   {
     name: "rtm_undo",
-    description: "Undo a transaction",
+    title: "Undo Last Action",
+    description: "Undoes the last action performed within a timeline.",
+    readOnlyHint: false,
     inputSchema: {
       type: "object",
       properties: {
         auth_token: {
           type: "string",
-          description: "Authentication token"
+          description: "Your Remember The Milk authentication token"
         },
         timeline: {
           type: "string",
-          description: "Timeline ID"
+          description: "Timeline ID containing the action to undo"
         },
         transaction_id: {
           type: "string",
-          description: "Transaction ID to undo"
+          description: "Transaction ID of the specific action to undo"
         }
       },
       required: ["auth_token", "timeline", "transaction_id"]
@@ -364,17 +417,19 @@ export const tools = [
   },
   {
     name: "rtm_parse_time",
-    description: "Parse a time string using RTM's natural language processing",
+    title: "Parse Natural Language Time",
+    description: "Converts natural language time descriptions into RTM timestamps.",
+    readOnlyHint: true,
     inputSchema: {
       type: "object",
       properties: {
         text: {
           type: "string",
-          description: "Time string to parse (e.g., 'tomorrow at 3pm', 'next friday')"
+          description: "Natural language time description (e.g., 'tomorrow at 3pm', 'next Monday')"
         },
         timezone: {
           type: "string",
-          description: "Timezone (optional, e.g., 'America/New_York')"
+          description: "Timezone for parsing (optional, e.g., 'America/New_York')"
         }
       },
       required: ["text"]
