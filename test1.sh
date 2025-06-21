@@ -3,7 +3,7 @@
 # MCP Server Connection Test Script
 # Replace YOUR_WORKER_URL with your actual Cloudflare Worker URL
 
-WORKER_URL="https://your-worker-name.your-subdomain.workers.dev"
+WORKER_URL="https://cowflare.vcto-6e7.workers.dev"
 
 echo "Testing MCP Server at: $WORKER_URL"
 echo "================================"

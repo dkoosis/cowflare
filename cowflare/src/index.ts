@@ -609,8 +609,13 @@ export default {
             const result = await handleToolCall(params.name, params.arguments || {}, env);
             return createJsonRpcResponse(id, {
               content: [{
-                type: "text",
-                text: JSON.stringify(result.value, null, 2)
+                type: "resource",
+                resource: {
+                  protocol: result.protocol,
+                  id: `rtm-result-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+                  version: "1.0",
+                  value: result.value
+                }
               }]
             });
 
