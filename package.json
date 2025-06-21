@@ -3,10 +3,10 @@
   "version": "2.0.0",
   "description": "Remember The Milk MCP Server for Cloudflare Workers",
   "main": "src/index.ts",
-  "type": "module",
-"scripts": {
+  "type": "module","scripts": {
     "dev": "wrangler dev --local",
     "build": "tsc",
+    "deploy": "wrangler deploy --env production",
     "deploy:dev": "wrangler deploy --env development",
     "deploy:prod": "wrangler deploy --env production",
     "test": "vitest",
