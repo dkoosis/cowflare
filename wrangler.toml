@@ -1,0 +1,39 @@
+# wrangler.toml - Configuration for RTM MCP Server
+
+name = "rtm-mcp-server"
+main = "src/index.ts"
+compatibility_date = "2025-06-19"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# KV namespace for storing auth tokens and rate limits
+[[kv_namespaces]]
+binding = "AUTH_STORE"
+id = "7ca3e0b80b9e429488a0be33d7e259fb"
+
+# Environment variables (set these in your Cloudflare dashboard or via wrangler secret)
+# [vars]
+# RTM_API_KEY = "your_rtm_api_key"
+# RTM_SHARED_SECRET = "your_rtm_shared_secret"
+# SERVER_URL = "https://your-worker.workers.dev"
+
+# Development environment
+[env.development]
+name = "rtm-mcp-server-dev"
+vars = { SERVER_URL = "http://localhost:8787" }
+
+# Production environment
+[env.production]
+name = "rtm-mcp-server-prod"
+# vars = { SERVER_URL = "https://rtm-mcp-server.your-domain.workers.dev" }
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Triggers (optional - for scheduled tasks)
+# [[triggers.crons]]
+# schedule = "0 */6 * * *"  # Every 6 hours
+# handler = "cleanupExpiredSessions"

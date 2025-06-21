@@ -7,26 +7,43 @@
 ├── .wrangler
 │   └── tmp
 ├── auth-page
+│   ├── .wrangler
+│   │   └── tmp
 │   ├── src
 │   │   └── index.ts
 │   └── wrangler.toml
 ├── cowflare
+│   ├── .wrangler
+│   │   ├── state
+│   │   │   └── v3
+│   │   │       ├── cache
+│   │   │       ├── kv
+│   │   │       └── workflows
+│   │   └── tmp
+│   ├── out.txt
 │   ├── README.md
 │   ├── src
 │   │   ├── auth.ts
 │   │   ├── index.ts
 │   │   ├── rtm-api.ts
-│   │   └── tools.ts
+│   │   ├── tools.ts
+│   │   ├── validation-schemas.ts
+│   │   └── validation.ts
 │   ├── test
 │   │   ├── env.d.ts
-│   │   ├── index.spec.ts
-│   │   └── tsconfig.json
+│   │   └── index.spec.ts
 │   ├── tsconfig.json
 │   ├── vitest.config.mts
-│   ├── worker-configuration.d.ts
-│   └── wrangler.jsonc
+│   └── worker-configuration.d.ts
+├── inspector-config.json
+├── mcp-debug.js
+├── out.txt
 ├── package-lock.json
 ├── package.json
-└── tree.txt
+├── README.md
+├── test1.sh
+├── tree.txt
+├── tsconfig.json
+└── wrangler.toml
 
-9 directories, 21 files
+18 directories, 29 files

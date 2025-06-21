@@ -1,8 +1,0 @@
-name = "rtm-auth-page" # Or any name you prefer for this worker
-main = "src/index.ts"
-compatibility_date = "2024-05-01"
-
-[vars]
-# The URL for your main MCP server worker will be configured here.
-# It's best to set this as a secret in production.
-MCP_SERVER_URL = "https://cowflare.vcto-6e7.workers.dev"
