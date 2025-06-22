@@ -3,24 +3,40 @@ main = "src/index.ts"
 compatibility_date = "2025-03-10"
 compatibility_flags = ["nodejs_compat"]
 
-[env.production]
-vars = { SERVER_URL = "https://rtm-mcp-server.YOUR-ACCOUNT.workers.dev" }
-
+# =================================================================
+# Default Environment (for local development using `wrangler dev`)
+# =================================================================
 [vars]
-# Add these via wrangler secret put
-# RTM_API_KEY = "your-api-key"
-# RTM_SHARED_SECRET = "your-shared-secret"
 SERVER_URL = "http://localhost:8787"
 
 [[kv_namespaces]]
 binding = "AUTH_STORE"
-id = "YOUR-KV-NAMESPACE-ID"
-preview_id = "YOUR-KV-NAMESPACE-ID"
+id = "7ca3e0b80b9e429488a0be33d7e259fb"
+preview_id = "7ca3e0b80b9e429488a0be33d7e259fb"
 
-[[durable_objects]]
-bindings = [
-  { name = "MCP_OBJECT", class_name = "RtmMCP" }
-]
+[[durable_objects.bindings]]
+name = "MCP_OBJECT"
+class_name = "RtmMCP"
 
-[observability]
-enabled = true
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [ "RtmMCP" ]
+
+
+# =================================================================
+# Production Environment (for deployment using `npm run deploy`)
+# =================================================================
+[env.production]
+vars = { SERVER_URL = "https://rtm-mcp-server.YOUR-ACCOUNT.workers.dev" }
+
+[[env.production.kv_namespaces]]
+binding = "AUTH_STORE"
+id = "7ca3e0b80b9e429488a0be33d7e259fb"
+
+[[env.production.durable_objects.bindings]]
+name = "MCP_OBJECT"
+class_name = "RtmMCP"
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = [ "RtmMCP" ]
