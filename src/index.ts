@@ -1,88 +1,203 @@
-/**
- * @file index.ts
- * @description Main entry point for the RTM MCP server. Sets up routing and tool registration.
- */
+import { McpAgent } from "agents/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { Hono } from "hono";
+import { layout, homeContent, renderAuthScreen } from "./utils";
+import { RtmApi } from "./rtm-api";
+import * as schemas from "./schemas";
 
-import { Hono } from 'hono';
-import { Server as McpServer, type CallToolResult } from '@modelcontextprotocol/sdk';
-import { createFetchHandler } from '@modelcontextprotocol/sdk/server';
-import { getSession } from './workers-oauth-utils';
-import { rtm } from './rtm-handler';
-import { makeRTMRequest, formatLists } from './rtm-api';
-import * as schemas from './schemas';
-import { toInputSchema } from './schemas';
-import type { Env } from './types';
-import type { z } from 'zod';
-
-// Helper for extracting inferred types from Zod schemas
-type InferSchema<T> = T extends z.ZodType<infer U> ? U : never;
-
-// Initialize the Hono router
 const app = new Hono<{ Bindings: Env }>();
 
-// --- Public Authentication Routes ---
-app.get('/login', rtm.login);
-app.get('/callback', rtm.callback);
-app.post('/logout', rtm.logout); // Can be app.get as well
+type Props = {
+  authToken: string;
+  apiKey: string;
+  sharedSecret: string;
+};
 
-// --- MCP Server and Tool Registration ---
-const mcpServer = new McpServer({
-  name: "rtm-mcp-server-refactored",
-  version: "1.0.0",
-});
+type State = null;
 
-// Helper function for creating success responses
-function createSuccessResponse(text: string): CallToolResult {
-  return { content: [{ type: "text", text }] };
+export class RtmMCP extends McpAgent<Env, State, Props> {
+  server = new McpServer({
+    name: "Remember The Milk MCP Server",
+    version: "1.0.0",
+  });
+
+  private api: RtmApi;
+
+  constructor(env: Env, state: State | null, props: Props) {
+    super(env, state, props);
+    this.api = new RtmApi(props.apiKey, props.sharedSecret);
+  }
+
+  async init() {
+    // Get Lists Tool
+    this.server.tool(
+      "rtm_get_lists",
+      schemas.GetListsSchema.omit({ auth_token: true }),
+      async () => {
+        const response = await this.api.makeRequest('rtm.lists.getList', {
+          auth_token: this.props.authToken
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatLists(response.lists.list)
+          }]
+        };
+      }
+    );
+
+    // Add Task Tool
+    this.server.tool(
+      "rtm_add_task",
+      schemas.AddTaskSchema.omit({ auth_token: true }),
+      async ({ name, list_id, due, priority, tags, notes }) => {
+        const timeline = await this.api.createTimeline(this.props.authToken);
+        const response = await this.api.makeRequest('rtm.tasks.add', {
+          auth_token: this.props.authToken,
+          timeline,
+          name,
+          list_id,
+          due,
+          priority,
+          tags,
+          notes
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `Task added successfully: ${response.list.taskseries.name} (ID: ${response.list.taskseries.id})`
+          }]
+        };
+      }
+    );
+
+    // Complete Task Tool
+    this.server.tool(
+      "rtm_complete_task",
+      schemas.CompleteTaskSchema.omit({ auth_token: true }),
+      async ({ list_id, taskseries_id, task_id }) => {
+        const timeline = await this.api.createTimeline(this.props.authToken);
+        await this.api.makeRequest('rtm.tasks.complete', {
+          auth_token: this.props.authToken,
+          timeline,
+          list_id,
+          taskseries_id,
+          task_id
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `Task completed successfully`
+          }]
+        };
+      }
+    );
+
+    // Get Tasks Tool
+    this.server.tool(
+      "rtm_get_tasks",
+      schemas.GetTasksSchema.omit({ auth_token: true }),
+      async ({ list_id, filter, last_sync }) => {
+        const response = await this.api.makeRequest('rtm.tasks.getList', {
+          auth_token: this.props.authToken,
+          list_id,
+          filter,
+          last_sync
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatTasks(response.tasks.list)
+          }]
+        };
+      }
+    );
+
+    // Search Tasks Tool
+    this.server.tool(
+      "rtm_search_tasks",
+      schemas.SearchTasksSchema.omit({ auth_token: true }),
+      async ({ query }) => {
+        const response = await this.api.makeRequest('rtm.tasks.getList', {
+          auth_token: this.props.authToken,
+          filter: query
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatTasks(response.tasks.list)
+          }]
+        };
+      }
+    );
+
+    // Add more tools as needed...
+  }
 }
 
-// Example: Registering the 'rtm_get_lists' tool
-mcpServer.registerTool(
-  "rtm_get_lists",
-  {
-    annotations: {
-      title: "Get RTM Lists",
-      description: "Retrieves all task lists from your Remember The Milk account.",
-      readOnlyHint: true,
-    },
-    // The input schema no longer needs an auth_token
-    inputSchema: toInputSchema(schemas.GetListsSchema.omit({ auth_token: true }))
-  },
-  // The tool handler receives the Hono context `c`
-  async (_args: Omit<InferSchema<typeof schemas.GetListsSchema>, 'auth_token'>, c: any) => {
-    // The middleware guarantees the session and token exist here
-    const session = c.get('session');
-    const authToken = session.get('rtm_auth_token');
-
-    const response = await makeRTMRequest(c.env, 'rtm.lists.getList', { auth_token: authToken });
-    const formattedLists = formatLists(response.lists.list);
-
-    return createSuccessResponse(formattedLists);
-  }
-);
-// ... register your other RTM tools here in the same way ...
-
-// --- Protected MCP Endpoint ---
-const mcpHandler = createFetchHandler(mcpServer);
-
-// Middleware to protect the /mcp endpoint
-app.use('/mcp', async (c, next) => {
-  const session = await getSession(c.req.raw, c.env.SESSION_KV, c.env.OAUTH_SESSION_SECRET);
-  if (!session || !session.get('rtm_auth_token')) {
-    return c.json({ jsonrpc: "2.0", error: { code: 401, message: "Unauthorized. Please log in via the /login endpoint." }}, 401);
-  }
-  // Make the validated session available to the tool handlers
-  c.set('session', session);
-  await next();
+// Homepage
+app.get("/", async (c) => {
+  const content = await homeContent();
+  return c.html(layout(content, "RTM MCP Server"));
 });
 
-// The actual MCP route that handles tool calls
-app.post('/mcp', async (c) => {
-  return mcpHandler(c.req.raw, { env: c.env, ctx: c });
+// Auth endpoint - initiates RTM auth flow
+app.get("/auth", async (c) => {
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  const frob = await api.getFrob();
+  const authUrl = api.getAuthUrl(frob, 'delete');
+  
+  // Store frob in KV for callback
+  await c.env.AUTH_STORE.put(`frob:${frob}`, "pending", { expirationTtl: 300 });
+  
+  const content = await renderAuthScreen(authUrl, frob);
+  return c.html(layout(content, "RTM Authentication"));
 });
 
-// --- Root and Health Check Routes ---
-app.get('/', (c) => c.text('RTM MCP Server is running. Use /login to authenticate.'));
-app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
+// Callback endpoint - completes RTM auth
+app.get("/auth/callback", async (c) => {
+  const frob = c.req.query('frob');
+  if (!frob) {
+    return c.text("Missing frob parameter", 400);
+  }
+
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  
+  try {
+    const authToken = await api.getToken(frob);
+    
+    // Store auth token in KV
+    await c.env.AUTH_STORE.put(`token:${authToken}`, "active");
+    
+    return c.redirect(`/?auth=${authToken}`);
+  } catch (error) {
+    return c.text("Authentication failed", 401);
+  }
+});
+
+// Mount MCP endpoints with auth check
+app.mount("/sse", async (req, env, ctx) => {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const token = authHeader.substring(7);
+  
+  // Verify token exists in KV
+  const tokenStatus = await env.AUTH_STORE.get(`token:${token}`);
+  if (!tokenStatus) {
+    return new Response("Invalid token", { status: 401 });
+  }
+
+  ctx.props = {
+    authToken: token,
+    apiKey: env.RTM_API_KEY,
+    sharedSecret: env.RTM_SHARED_SECRET
+  };
+
+  return RtmMCP.mount("/sse").fetch(req, env, ctx);
+});
 
 export default app;

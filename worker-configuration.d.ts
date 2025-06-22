@@ -1,6 +1,12 @@
 interface Env {
+  // KV Namespaces
+  AUTH_STORE: KVNamespace;
+  
+  // Durable Objects
+  MCP_OBJECT: DurableObjectNamespace;
+  
+  // Environment Variables
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
-  AUTH_STORE: KVNamespace;
   SERVER_URL: string;
 }

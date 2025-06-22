@@ -1,58 +1,26 @@
-# RTM MCP Server - Cloudflare Workers Configuration
-
 name = "rtm-mcp-server"
 main = "src/index.ts"
-compatibility_date = "2024-06-21"
+compatibility_date = "2025-03-10"
 compatibility_flags = ["nodejs_compat"]
 
-# Workers.dev deployment (remove if using custom domain)
-workers_dev = true
+[env.production]
+vars = { SERVER_URL = "https://rtm-mcp-server.YOUR-ACCOUNT.workers.dev" }
 
-# Build configuration
-[build]
-command = "npm run build"
+[vars]
+# Add these via wrangler secret put
+# RTM_API_KEY = "your-api-key"
+# RTM_SHARED_SECRET = "your-shared-secret"
+SERVER_URL = "http://localhost:8787"
 
-# KV Namespaces - You need to create these first!
-# Run: wrangler kv:namespace create AUTH_STORE
-# Then paste the ID here
 [[kv_namespaces]]
 binding = "AUTH_STORE"
-id = "7ca3e0b80b9e429488a0be33d7e259fb"  
+id = "YOUR-KV-NAMESPACE-ID"
+preview_id = "YOUR-KV-NAMESPACE-ID"
 
-# Optional: Create METRICS_STORE if you want metrics
-# Run: wrangler kv:namespace create METRICS_STORE
-# [[kv_namespaces]]
-# binding = "METRICS_STORE"
-# id = "YOUR_METRICS_STORE_ID_HERE"  # Replace with actual ID
+[[durable_objects]]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "RtmMCP" }
+]
 
-# Environment variables (set via dashboard or wrangler secret)
-[vars]
-LOG_LEVEL = "info"
-SERVER_URL = "https://rtm-mcp-server.workers.dev"
-
-# Secrets (set via wrangler secret put)
-# RTM_API_KEY = "your_api_key"
-# RTM_SHARED_SECRET = "your_shared_secret"
-
-# Performance and limits
-[limits]
-cpu_ms = 50
-
-# Observability
 [observability]
 enabled = true
-
-# Development environment
-[env.development]
-name = "rtm-mcp-server-dev"
-vars = { LOG_LEVEL = "debug", SERVER_URL = "http://localhost:8787" }
-
-# Staging environment
-[env.staging]
-name = "rtm-mcp-server-staging"
-vars = { LOG_LEVEL = "info" }
-
-# Production environment
-[env.production]
-name = "rtm-mcp-server"
-vars = { LOG_LEVEL = "warn" }

@@ -1,46 +1,23 @@
 {
   "name": "rtm-mcp-server",
-  "version": "2.0.0",
-  "description": "Remember The Milk MCP Server for Cloudflare Workers",
-  "main": "dist/index.js",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Remember The Milk MCP Server on Cloudflare Workers",
+  "main": "src/index.ts",
   "scripts": {
-    "build": "tsc",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "vitest",
-    "test:watch": "vitest --watch",
-    "lint": "eslint src --ext .ts",
-    "format": "prettier --write src/**/*.ts"
+    "start": "wrangler dev"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
-    "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.22.4"
+    "agents": "^0.0.95",
+    "hono": "^4.8.2",
+    "workers-mcp": "^0.0.13",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5.0",
-    "@cloudflare/workers-types": "^4.20241218.0",
-    "@types/node": "^20.11.24",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.5",
-    "typescript": "^5.3.3",
-    "vitest": "^2.0.5",
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "typescript": "^5.8.3",
     "wrangler": "^4.20.5"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "rememberthemilk",
-    "rtm",
-    "cloudflare-workers"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+  }
 }
