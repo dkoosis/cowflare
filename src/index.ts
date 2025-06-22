@@ -3,20 +3,19 @@
  * @description RTM MCP Server v2.0 - Unified schema implementation
  * Modern architecture using @modelcontextprotocol/sdk with single-source schemas
  */
-
-import { McpServer } from '@modelcontextprotocol/sdk/server/index.js';
-import { createFetchHandler } from '@modelcontextprotocol/sdk/server/http.js';
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { 
-  Env, 
-  makeRTMRequest, 
-  formatLists, 
-  formatTasks, 
-  generateSessionId 
+import { Server as McpServer } from '@modelcontextprotocol/sdk/server';
+import { createFetchHandler } from '@modelcontextprotocol/sdk/server';
+import { CallToolResult } from '@modelcontextprotocol/sdk/types';
+import {
+  Env,
+  makeRTMRequest,
+  formatLists,
+  formatTasks,
+  generateSessionId
 } from './rtm-api.js';
-import { 
-  checkRateLimit, 
-  getClientId, 
+import {
+  checkRateLimit,
+  getClientId,
   handleAuthCallback,
   savePendingAuth,
   getPendingAuth,
@@ -26,7 +25,6 @@ import {
 } from './auth.js';
 import * as schemas from './schemas/index.js';
 import { toInputSchema } from './schemas/index.js';
-import { RTMAPIError, ValidationError, RateLimitError } from './validation.js';
 import type { z } from 'zod';
 
 // Type helper for extracting inferred types from Zod schemas
