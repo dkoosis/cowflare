@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-
-aicli_path="$(realpath "$(dirname $0)/../src/bin/aicli.ts")"
-
-tsx "$aicli_path" "$@"

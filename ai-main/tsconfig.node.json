@@ -1,9 +1,0 @@
-{
-	"extends": "./tsconfig.base.json",
-	"include": [
-		"./**/*.ts",
-		"./demos/structured-output-node/src/**/*.ts",
-		"./tools/create-demo/src/**/*.ts"
-	],
-	"exclude": ["**/src/**/*.ts", "**/test/**/*.ts"]
-}
