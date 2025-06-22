@@ -27,7 +27,7 @@ new_sqlite_classes = [ "RtmMCP" ]
 # Production Environment (for deployment using `npm run deploy`)
 # =================================================================
 [env.production]
-vars = { SERVER_URL = "https://rtm-mcp-server.YOUR-ACCOUNT.workers.dev" }
+vars = { SERVER_URL = "https://https://rtm-mcp-server-production.vcto-6e7.workers.dev" }
 
 [[env.production.kv_namespaces]]
 binding = "AUTH_STORE"
