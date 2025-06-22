@@ -5,7 +5,7 @@
  * Exports both the Hono app (default) and RtmMCP Durable Object (named)
  */
 
-import { McpAgent } from "agents";
+import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Hono } from "hono";
