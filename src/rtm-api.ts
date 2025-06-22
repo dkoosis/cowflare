@@ -1,6 +1,6 @@
 // src/rtm-api.ts - RTM API types and request handler
 
-import { RTMAPIError } from './validation.js';
+import { RTMAPIError } from '../src_backup/validation.js';
 
 // Environment interface for Cloudflare Workers
 export interface Env {
