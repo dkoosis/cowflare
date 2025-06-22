@@ -152,6 +152,20 @@ export interface LogEntry {
   metadata?: Record<string, any>;
 }
 
+// Simple Logger implementation
+export interface Logger {
+  debug(message: string, metadata?: Record<string, any>): void;
+  info(message: string, metadata?: Record<string, any>): void;
+  warn(message: string, metadata?: Record<string, any>): void;
+  error(message: string, metadata?: Record<string, any>): void;
+}
+
+// Simple Metrics Collector implementation
+export interface MetricsCollector {
+  trackEvent(event: MetricEvent): void;
+  getMetrics(): MetricEvent[];
+}
+
 // Tool Types
 export interface ToolContext {
   env: Env;

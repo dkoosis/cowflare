@@ -38,8 +38,11 @@ const CACHED_AUTH_TTL = 86400; // 24 hours
  * @returns Client identifier string
  */
 export function getClientId(request: Request): string {
+  const forwardedFor = request.headers.get('X-Forwarded-For');
+  const firstIp = forwardedFor?.split(',')[0]?.trim(); // Add optional chaining
+  
   return request.headers.get('CF-Connecting-IP') || 
-         request.headers.get('X-Forwarded-For')?.split(',')[0].trim() || 
+         firstIp || 
          request.headers.get('X-Real-IP') ||
          'anonymous';
 }
@@ -519,6 +522,8 @@ function createErrorPage(
  * Escapes HTML to prevent XSS
  */
 function escapeHtml(str: string): string {
+  if (!str) return ''; // Add guard clause
+  
   const htmlEscapes: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',

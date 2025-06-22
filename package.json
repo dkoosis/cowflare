@@ -1,34 +1,35 @@
 {
   "name": "rtm-mcp-server",
-  "version": "1.0.0",
-  "description": "Remember The Milk MCP Server - Clean SDK Implementation",
+  "version": "2.0.0",
+  "description": "Remember The Milk MCP Server for Cloudflare Workers",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
     "build": "tsc",
+    "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write src/**/*.ts",
-    "type-check": "tsc --noEmit"
+    "format": "prettier --write src/**/*.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^3.22.4"
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.4"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.0",
-    "@cloudflare/workers-types": "^4.20240620.0",
-    "@types/node": "^20.14.0",
-    "@typescript-eslint/eslint-plugin": "^7.14.0",
-    "@typescript-eslint/parser": "^7.14.0",
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
-    "prettier": "^3.3.2",
-    "typescript": "^5.5.0",
-    "vitest": "^1.6.0",
-    "wrangler": "^3.62.0"
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.5",
+    "wrangler": "^3.91.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -36,15 +37,10 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "rememberthemilk",
     "rtm",
-    "remember-the-milk",
-    "cloudflare-workers",
-    "task-management"
+    "cloudflare-workers"
   ],
   "author": "Your Name",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/rtm-mcp-server.git"
-  }
+  "license": "MIT"
 }

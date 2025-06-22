@@ -4,9 +4,9 @@
  * Modern architecture using @modelcontextprotocol/sdk with single-source schemas
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server';
+import { McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { createFetchHandler } from '@modelcontextprotocol/sdk/server/http.js';
-import { CallToolResult } from '@modelcontextprotocol/sdk/types';
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { 
   Env, 
   makeRTMRequest, 
@@ -24,9 +24,13 @@ import {
   getCachedAuthToken,
   deletePendingAuth
 } from './auth.js';
-import * as schemas from './schemas';
-import { toInputSchema } from './schemas';
+import * as schemas from './schemas/index.js';
+import { toInputSchema } from './schemas/index.js';
 import { RTMAPIError, ValidationError, RateLimitError } from './validation.js';
+import type { z } from 'zod';
+
+// Type helper for extracting inferred types from Zod schemas
+type InferSchema<T> = T extends z.ZodType<infer U> ? U : never;
 
 // Initialize MCP server
 const server = new McpServer({
@@ -77,9 +81,9 @@ server.registerTool(
       description: "Test MCP server connection and configuration",
       readOnlyHint: true,
     },
-    inputSchema: toInputSchema(schemas.AuthenticateSchema) // Empty schema
+    inputSchema: toInputSchema(schemas.AuthenticateSchema)
   },
-  async () => {
+  async (_args: InferSchema<typeof schemas.AuthenticateSchema>) => {
     return createSuccessResponse(
       `✅ MCP Server Connection Test\n\n` +
       `Status: Connected and operational\n` +
@@ -101,7 +105,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.AuthenticateSchema)
   },
-  async (_args, env: Env) => {
+  async (_args: InferSchema<typeof schemas.AuthenticateSchema>, env: Env) => {
     try {
       const sessionId = generateSessionId();
       const response = await makeRTMRequest(
@@ -161,7 +165,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.CompleteAuthSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.CompleteAuthSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.CompleteAuthSchema.parse(args);
       const pendingAuth = await getPendingAuth(validatedArgs.session_id, env);
@@ -209,7 +213,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.CheckAuthStatusSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.CheckAuthStatusSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.CheckAuthStatusSchema.parse(args);
       const cachedAuth = await getCachedAuthToken(validatedArgs.session_id, env);
@@ -256,7 +260,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.CreateTimelineSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.CreateTimelineSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.CreateTimelineSchema.parse(args);
       const response = await makeRTMRequest(
@@ -289,7 +293,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.GetListsSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.GetListsSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.GetListsSchema.parse(args);
       const response = await makeRTMRequest(
@@ -318,7 +322,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.AddListSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.AddListSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.AddListSchema.parse(args);
       const params: Record<string, string> = {
@@ -366,7 +370,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.GetTasksSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.GetTasksSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.GetTasksSchema.parse(args);
       const params: Record<string, string> = { 
@@ -402,7 +406,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.AddTaskSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.AddTaskSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.AddTaskSchema.parse(args);
       const params: Record<string, string> = {
@@ -453,7 +457,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.CompleteTaskSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.CompleteTaskSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.CompleteTaskSchema.parse(args);
       const response = await makeRTMRequest(
@@ -485,7 +489,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.DeleteTaskSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.DeleteTaskSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.DeleteTaskSchema.parse(args);
       const response = await makeRTMRequest(
@@ -517,7 +521,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.SetDueDateSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.SetDueDateSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.SetDueDateSchema.parse(args);
       const params: Record<string, string> = {
@@ -566,7 +570,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.AddTagsSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.AddTagsSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.AddTagsSchema.parse(args);
       const response = await makeRTMRequest(
@@ -598,7 +602,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.MoveTaskSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.MoveTaskSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.MoveTaskSchema.parse(args);
       const response = await makeRTMRequest(
@@ -638,7 +642,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.SetPrioritySchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.SetPrioritySchema>, env: Env) => {
     try {
       const validatedArgs = schemas.SetPrioritySchema.parse(args);
       const response = await makeRTMRequest(
@@ -678,10 +682,10 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.UndoSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.UndoSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.UndoSchema.parse(args);
-      const response = await makeRTMRequest(
+      await makeRTMRequest(
         'rtm.transactions.undo',
         validatedArgs,
         env.RTM_API_KEY,
@@ -709,7 +713,7 @@ server.registerTool(
     },
     inputSchema: toInputSchema(schemas.ParseTimeSchema)
   },
-  async (args, env: Env) => {
+  async (args: InferSchema<typeof schemas.ParseTimeSchema>, env: Env) => {
     try {
       const validatedArgs = schemas.ParseTimeSchema.parse(args);
       const params: Record<string, string> = {
@@ -745,7 +749,7 @@ const handler = createFetchHandler(server);
 
 // Main Worker export
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     
     // Handle OAuth callback

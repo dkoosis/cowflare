@@ -289,6 +289,8 @@ function formatDueDate(dueDate: string | undefined): string {
 /**
  * Formats tasks for display with improved structure
  */
+// rtm-api.ts - Fixed formatTasks function
+
 export function formatTasks(tasks: RTMGetTasksResponse['tasks']): string {
   if (!tasks.list || tasks.list.length === 0) {
     return "No tasks found.";
@@ -308,6 +310,9 @@ export function formatTasks(tasks: RTMGetTasksResponse['tasks']): string {
     for (const series of list.taskseries) {
       const taskArray = Array.isArray(series.task) ? series.task : [series.task];
       const task = taskArray[0];
+      
+      // Guard against undefined task
+      if (!task) continue;
       
       // Skip completed or deleted tasks
       if (task.completed || task.deleted) continue;
