@@ -1,0 +1,61 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.0.4/schema.json",
+	"assist": {
+		"actions": {
+			"source": {
+				"useSortedKeys": "on"
+			}
+		},
+		"enabled": true
+	},
+	"files": {
+		"includes": [
+			"demos/**",
+			"packages/**",
+			"libs/**",
+			"playground/**",
+			"tools/**",
+			"!**/worker-configuration.d.ts",
+			"!types/workerd.d.ts",
+			"!**/tsconfig.json",
+			"!**/tsconfig.*.json",
+			"!**/wrangler.json",
+			"!**/wrangler.jsonc",
+			"!**/package.json"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentWidth": 4,
+		"lineWidth": 100
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"style": {
+				"noInferrableTypes": "error",
+				"noNonNullAssertion": "off",
+				"noParameterAssign": "error",
+				"noUnusedTemplateLiteral": "error",
+				"noUselessElse": "error",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useEnumInitializers": "error",
+				"useNumberNamespace": "error",
+				"useSelfClosingElements": "error",
+				"useSingleVarDeclarator": "error"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "off",
+				"noDebugger": "off",
+				"noExplicitAny": "off"
+			}
+		}
+	},
+	"vcs": {
+		"clientKind": "git",
+		"enabled": true,
+		"useIgnoreFile": true
+	}
+}

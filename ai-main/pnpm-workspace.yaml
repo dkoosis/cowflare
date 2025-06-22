@@ -1,0 +1,12 @@
+packages:
+  - ./libs/*
+  - ./demos/*
+  - ./demos/remote-mcp-auth0/*
+  - ./packages/*
+  - ./playground/*
+  - ./tools/aicli
+  - "!./demos/remote-mcp-auth0"
+  - "!./demos/remote-mcp-auth0/docs"
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

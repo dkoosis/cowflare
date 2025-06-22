@@ -1,0 +1,38 @@
+#!/bin/sh
+# This Husky pre-push hook checks two things:
+# 1. That the lockfile is not modified by `npm install`.
+# 2. That formatting does not introduce any unstaged changes.
+
+# ANSI colour codes for yellow and reset.
+YELLOW="\033[1;33m"
+RESET="\033[0m"
+
+# Replace "pnpm-lock.yaml" with your actual lockfile if needed.
+LOCKFILE="pnpm-lock.yaml"
+
+# 1. Ensure the lockfile exists.
+if [ ! -f "$LOCKFILE" ]; then
+  echo ""
+  echo "**ACTION REQUIRED**"
+  echo "${YELLOW}The lockfile ($LOCKFILE) was not found. Please ensure it is present.${RESET}"
+  echo ""
+  exit 1
+fi
+
+# 2. Calculate the original hash of the lockfile.
+ORIGINAL_HASH=$(sha256sum "$LOCKFILE" | cut -d ' ' -f 1)
+
+# 3. Run pnpm install.
+pnpm install --child-concurrency=10
+
+# 4. Recalculate the hash after pnpm install.
+NEW_HASH=$(sha256sum "$LOCKFILE" | cut -d ' ' -f 1)
+
+# 5. Compare the hashes.
+if [ "$ORIGINAL_HASH" != "$NEW_HASH" ]; then
+  echo ""
+  echo "**ACTION REQUIRED**"
+  echo "${YELLOW}Your lockfile has been modified after npm install. Please review and commit the updated lockfile.${RESET}"
+  echo ""
+  exit 1
+fi

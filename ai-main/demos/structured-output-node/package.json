@@ -1,0 +1,22 @@
+{
+	"dependencies": {
+		"ai": "^4.3.16",
+		"zod": "^3.25.67"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.0.4",
+		"@cloudflare/workers-types": "^4.20250620.0",
+		"typescript": "^5.8.3",
+		"vitest": "~3.2.4"
+	},
+	"name": "structured-output-node",
+	"private": true,
+	"scripts": {
+		"dev": "npx tsx ./src/index.ts",
+		"format": "biome format --write",
+		"lint": "biome lint --error-on-warnings",
+		"lint:fix": "biome lint --fix",
+		"type-check": "tsc --noEmit"
+	},
+	"type": "module"
+}

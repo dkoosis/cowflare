@@ -1,0 +1,24 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["./types/workerd.d.ts"]
+	},
+	"include": [
+		"./demos/agent-scheduler/src/**/*.ts",
+		"./demos/agent-task-manager-human-in-the-loop/src/**/*.ts",
+		"./demos/agent-task-manager/src/**/*.ts",
+		"./demos/evaluator-optimiser/src/**/*.ts",
+		"./demos/model-scraper/src/**/*.ts",
+		"./demos/orchestrator-workers/src/**/*.ts",
+		"./demos/parallelisation/src/**/*.ts",
+		"./demos/prompt-chaining/src/**/*.ts",
+		"./demos/routing/src/**/*.ts",
+		"./demos/structured-output/src/**/*.ts",
+		"./demos/text-generation-stream/src/**/*.ts",
+		"./demos/text-generation/src/**/*.ts",
+		"./demos/tool-calling-stream-traditional/src/**/*.ts",
+		"./demos/tool-calling-stream/src/**/*.ts",
+		"./demos/tool-calling/src/**/*.ts",
+		"./demos/ui-worker/src/server/**/*.ts"
+	]
+}

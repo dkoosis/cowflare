@@ -3,7 +3,10 @@
  * @description RTM MCP Server v2.0 - Unified schema implementation
  * Modern architecture using @modelcontextprotocol/sdk with single-source schemas
  */
-import { Server as McpServer, createFetchHandler, CallToolResult } from '@modelcontextprotocol/sdk';
+S
+import { Server as McpServer, CallToolResult } from '@modelcontextprotocol/sdk';
+import { createFetchHandler } from '@modelcontextprotocol/sdk/server/http.js';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   Env,
   makeRTMRequest,

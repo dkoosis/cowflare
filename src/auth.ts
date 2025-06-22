@@ -521,8 +521,11 @@ function createErrorPage(
 /**
  * Escapes HTML to prevent XSS
  */
+/**
+ * Escapes HTML to prevent XSS
+ */
 function escapeHtml(str: string | undefined): string {
-  if (!str) return ''; // Add guard clause
+  if (!str) return '';
   
   const htmlEscapes: Record<string, string> = {
     '&': '&amp;',
@@ -532,5 +535,5 @@ function escapeHtml(str: string | undefined): string {
     "'": '&#39;'
   };
   
-  return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
+  return str.replace(/[&<>"']/g, char => htmlEscapes[char] || char);
 }
