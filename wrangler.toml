@@ -5,27 +5,25 @@ main = "src/index.ts"
 compatibility_date = "2024-06-21"
 compatibility_flags = ["nodejs_compat"]
 
-# Account and deployment
-account_id = "" # Set via environment or wrangler login
+# Workers.dev deployment (remove if using custom domain)
 workers_dev = true
-route = "" # Set custom route if needed
 
 # Build configuration
 [build]
 command = "npm run build"
-watch_paths = ["src/**/*.ts"]
 
-# Node.js compatibility
-node_compat = true
-
-# KV Namespaces
+# KV Namespaces - You need to create these first!
+# Run: wrangler kv:namespace create AUTH_STORE
+# Then paste the ID here
 [[kv_namespaces]]
 binding = "AUTH_STORE"
-id = "" # Set via wrangler kv:namespace create AUTH_STORE
+id = "7ca3e0b80b9e429488a0be33d7e259fb"  
 
-[[kv_namespaces]]
-binding = "METRICS_STORE"
-id = "" # Set via wrangler kv:namespace create METRICS_STORE
+# Optional: Create METRICS_STORE if you want metrics
+# Run: wrangler kv:namespace create METRICS_STORE
+# [[kv_namespaces]]
+# binding = "METRICS_STORE"
+# id = "YOUR_METRICS_STORE_ID_HERE"  # Replace with actual ID
 
 # Environment variables (set via dashboard or wrangler secret)
 [vars]
@@ -39,7 +37,6 @@ SERVER_URL = "https://rtm-mcp-server.workers.dev"
 # Performance and limits
 [limits]
 cpu_ms = 50
-memory_mb = 128
 
 # Observability
 [observability]
@@ -59,12 +56,3 @@ vars = { LOG_LEVEL = "info" }
 [env.production]
 name = "rtm-mcp-server"
 vars = { LOG_LEVEL = "warn" }
-
-# Tail consumers for log aggregation (optional)
-# [[tail_consumers]]
-# service = "log-aggregator"
-
-# Durable Objects (if needed for future features)
-# [[durable_objects.bindings]]
-# name = "RATE_LIMITER"
-# class_name = "RateLimiterDO"

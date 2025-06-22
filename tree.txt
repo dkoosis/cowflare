@@ -34,13 +34,6 @@
 ├── src
 │   ├── auth.ts
 │   ├── index.ts
-│   ├── middleware
-│   │   ├── index.ts
-│   │   └── rate-limiter.ts
-│   ├── monitoring
-│   │   └── metrics.ts
-│   ├── rtm-api
-│   │   └── client.ts
 │   ├── rtm-api.ts
 │   ├── schemas
 │   │   ├── auth-schemas.ts
@@ -48,15 +41,7 @@
 │   │   ├── list-schemas.ts
 │   │   ├── task-schemas.ts
 │   │   └── utility-schemas.ts
-│   ├── tools
-│   │   ├── authentication.ts
-│   │   ├── index.ts
-│   │   ├── tasks.ts
-│   │   └── tool-bsae.ts
 │   ├── types.ts
-│   ├── utils
-│   │   └── logger.ts
-│   ├── validation-schemas.ts
 │   └── validation.ts
 ├── test
 │   ├── env.d.ts
@@ -68,4 +53,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-19 directories, 50 files
+14 directories, 40 files
