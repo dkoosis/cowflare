@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 export class RtmApi {
   private apiKey: string;
   private sharedSecret: string;
@@ -10,13 +8,17 @@ export class RtmApi {
     this.sharedSecret = sharedSecret;
   }
 
-  private generateSignature(params: Record<string, string>): string {
+  private async generateSignature(params: Record<string, string>): Promise<string> {
     const sortedKeys = Object.keys(params).sort();
     const paramString = sortedKeys.map(key => `${key}${params[key]}`).join('');
-    return crypto
-      .createHash('md5')
-      .update(this.sharedSecret + paramString)
-      .digest('hex');
+    const message = this.sharedSecret + paramString;
+    
+    // Use Web Crypto API for Cloudflare Workers
+    const encoder = new TextEncoder();
+    const data = encoder.encode(message);
+    const hashBuffer = await crypto.subtle.digest('MD5', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   async makeRequest(method: string, params: Record<string, string> = {}): Promise<any> {
@@ -27,7 +29,7 @@ export class RtmApi {
       format: 'json'
     };
 
-    allParams.api_sig = this.generateSignature(allParams);
+    allParams.api_sig = await this.generateSignature(allParams);
 
     const url = new URL(this.baseUrl);
     Object.entries(allParams).forEach(([key, value]) => {
@@ -49,14 +51,14 @@ export class RtmApi {
     return response.frob;
   }
 
-  getAuthUrl(frob: string, perms: 'read' | 'write' | 'delete' = 'delete'): string {
+  async getAuthUrl(frob: string, perms: 'read' | 'write' | 'delete' = 'delete'): Promise<string> {
     const params = {
       api_key: this.apiKey,
       frob,
       perms
     };
 
-    const signature = this.generateSignature(params);
+    const signature = await this.generateSignature(params);
     const url = new URL('https://www.rememberthemilk.com/services/auth/');
     
     Object.entries(params).forEach(([key, value]) => {
@@ -79,24 +81,22 @@ export class RtmApi {
     return response.timeline;
   }
 
-  formatLists(lists: any[]): string {
-    if (!Array.isArray(lists)) {
-      lists = [lists];
-    }
-
-    return lists.map(list => 
+  formatLists(lists: any): string {
+    if (!lists) return 'No lists found';
+    const listArray = Array.isArray(lists) ? lists : [lists];
+    
+    return listArray.map(list => 
       `- ${list.name} (ID: ${list.id})${list.smart === '1' ? ' [Smart List]' : ''}`
     ).join('\n');
   }
 
-  formatTasks(lists: any[]): string {
-    if (!Array.isArray(lists)) {
-      lists = [lists];
-    }
-
+  formatTasks(lists: any): string {
+    if (!lists) return 'No tasks found';
+    const listArray = Array.isArray(lists) ? lists : [lists];
+    
     const tasks: string[] = [];
     
-    lists.forEach(list => {
+    listArray.forEach(list => {
       if (list.taskseries) {
         const seriesArray = Array.isArray(list.taskseries) ? list.taskseries : [list.taskseries];
         
@@ -105,7 +105,7 @@ export class RtmApi {
           
           taskArray.forEach(task => {
             const completed = task.completed !== '';
-            const priority = series.task.priority === 'N' ? '' : ` [P${series.task.priority}]`;
+            const priority = task.priority === 'N' ? '' : ` [P${task.priority}]`;
             const due = task.due ? ` (Due: ${task.due})` : '';
             const status = completed ? ' ✓' : '';
             

@@ -1,6 +1,18 @@
+// File: src/utils.ts
+/**
+ * @file UI utility functions and HTML templates
+ * @description Provides layout components and page templates for the web interface
+ */
+
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 
+/**
+ * Main layout wrapper for all pages
+ * @param content - Page-specific content to render
+ * @param title - Page title for the browser tab
+ * @returns Complete HTML page with header, content, and footer
+ */
 export const layout = (content: HtmlEscapedString | string, title: string) => html`
   <!DOCTYPE html>
   <html lang="en">
@@ -30,39 +42,12 @@ export const layout = (content: HtmlEscapedString | string, title: string) => ht
   </html>
 `;
 
-export const homeContent = async (): Promise<HtmlEscapedString> => {
-  return html`
-    <div class="max-w-4xl mx-auto">
-      <h1 class="text-3xl font-bold mb-6">Remember The Milk MCP Server</h1>
-      
-      <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-        <h2 class="text-xl font-semibold mb-4">Getting Started</h2>
-        <ol class="list-decimal list-inside space-y-2">
-          <li>
-            <a href="/auth" class="text-blue-600 hover:text-blue-700">
-              Authenticate with Remember The Milk
-            </a>
-          </li>
-          <li>Copy your authentication token from the URL</li>
-          <li>Configure your MCP client with the Bearer token</li>
-          <li>Connect to: <code class="bg-gray-100 px-2 py-1 rounded">${new URL(import.meta.url).origin}/sse</code></li>
-        </ol>
-      </div>
-
-      <div class="bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-semibold mb-4">Available Tools</h2>
-        <ul class="space-y-2">
-          <li><code class="bg-gray-100 px-2 py-1 rounded">rtm_get_lists</code> - Get all your lists</li>
-          <li><code class="bg-gray-100 px-2 py-1 rounded">rtm_add_task</code> - Add a new task</li>
-          <li><code class="bg-gray-100 px-2 py-1 rounded">rtm_complete_task</code> - Complete a task</li>
-          <li><code class="bg-gray-100 px-2 py-1 rounded">rtm_get_tasks</code> - Get tasks from lists</li>
-          <li><code class="bg-gray-100 px-2 py-1 rounded">rtm_search_tasks</code> - Search tasks with RTM queries</li>
-        </ul>
-      </div>
-    </div>
-  `;
-};
-
+/**
+ * Renders the authentication instruction screen
+ * @param authUrl - The RTM authorization URL
+ * @param frob - The temporary frob token
+ * @returns HTML content for the auth instruction page
+ */
 export const renderAuthScreen = async (authUrl: string, frob: string): Promise<HtmlEscapedString> => {
   return html`
     <div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
@@ -72,6 +57,7 @@ export const renderAuthScreen = async (authUrl: string, frob: string): Promise<H
       
       <a 
         href="${authUrl}" 
+        target="_blank"
         class="block w-full py-3 px-4 bg-blue-600 text-white text-center rounded-md font-medium hover:bg-blue-700 transition-colors"
       >
         Authenticate with RTM
