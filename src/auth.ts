@@ -521,7 +521,7 @@ function createErrorPage(
 /**
  * Escapes HTML to prevent XSS
  */
-function escapeHtml(str: string): string {
+function escapeHtml(str: string | undefined): string {
   if (!str) return ''; // Add guard clause
   
   const htmlEscapes: Record<string, string> = {
