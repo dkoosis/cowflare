@@ -29,13 +29,6 @@ type Props = {
 type State = null;
 
 // --- PKCE Helper Function ---
-/**
- * Verifies the PKCE code challenge.
- * @param codeVerifier The plain-text string from the client.
- * @param codeChallenge The hashed and encoded string from the initial auth request.
- * @returns {Promise<boolean>} True if the verifier matches the challenge.
- */
-// --- PKCE Helper Function ---
 async function verifyPkceChallenge(codeVerifier: string, codeChallenge: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const data = encoder.encode(codeVerifier);
@@ -46,12 +39,11 @@ async function verifyPkceChallenge(codeVerifier: string, codeChallenge: string):
 
 /**
  * MCP Durable Object - Handles the actual MCP connection.
- * Stores the RTM token only for the duration of the active session.
  */
 export class RtmMCP extends McpAgent<Env, State, Props> {
   server = new McpServer({
     name: "Remember The Milk MCP Server",
-    version: "2.0.0",
+    version: "2.4.0", // Version bump
   });
 
   private api!: RtmApi;
@@ -204,14 +196,11 @@ const app = new Hono<{ Bindings: Env }>();
  */
 app.get("/authorize", async (c) => {
   const { response_type, client_id, redirect_uri, state, scope, code_challenge, code_challenge_method } = c.req.query();
-  console.log("Authorization request received for /authorize");
 
   if (response_type !== "code" || !client_id || !redirect_uri || !state || !code_challenge) {
-    console.error("[/authorize] Invalid request: missing required parameters.");
     return c.text("invalid_request: missing required parameters.", 400);
   }
   if (code_challenge_method !== 'S256') {
-    console.error("[/authorize] Invalid request: code_challenge_method must be S256.");
     return c.text("invalid_request: code_challenge_method must be S256.", 400);
   }
 
@@ -230,7 +219,6 @@ app.get("/authorize", async (c) => {
   const ourCallbackUrl = new URL("/callback", c.req.url);
   ourCallbackUrl.searchParams.set("frob", frob);
 
-  console.log("[/authorize] Successfully generated frob and redirecting user via HTML page.");
   return c.html(`
     <!DOCTYPE html>
     <html lang="en">
@@ -240,26 +228,56 @@ app.get("/authorize", async (c) => {
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; display: grid; place-items: center; min-height: 100vh; margin: 0; }
           .container { background: white; padding: 2.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; text-align: center; }
+          .button { display: inline-block; background: #007aff; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; border: none; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+          .button:hover { background: #0056b3; }
+          .info { color: #666; margin: 1.5rem 0; line-height: 1.5; }
+          .error { color: #d93025; font-weight: 500; }
+          .status { display: none; align-items: center; justify-content: center; margin-top: 1.5rem; }
           .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #007aff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin-right: 10px; }
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>Connecting to Remember The Milk...</h1>
-          <p>Your browser will open a new window to authorize access. After you grant access, please close the RTM window to complete the connection.</p>
-          <div class="spinner"></div>
+          <h1>Connect to Remember The Milk</h1>
+          <p class="info">Click below to open the RTM authorization window. After you grant access, please close that window to complete the connection.</p>
+          <button id="authButton" class="button">Connect to RTM</button>
+          <div id="status" class="status">
+            <div class="spinner"></div>
+            <span>Waiting for authorization...</span>
+          </div>
         </div>
         <script>
-          document.addEventListener('DOMContentLoaded', () => {
-            const authWindow = window.open("${authUrl}", 'rtm_auth', 'width=800,height=600,scrollbars=yes');
-            const checkInterval = setInterval(() => {
-              if (authWindow && authWindow.closed) {
-                clearInterval(checkInterval);
-                document.querySelector('.container h1').textContent = 'Finalizing Connection...';
-                window.location.href = "${ourCallbackUrl.toString()}";
-              }
-            }, 1000);
+          const authButton = document.getElementById('authButton');
+          const statusDiv = document.getElementById('status');
+          const infoPara = document.querySelector('.info');
+          
+          authButton.addEventListener('click', () => {
+            authButton.style.display = 'none';
+            statusDiv.style.display = 'flex';
+            infoPara.textContent = 'Waiting for authorization...';
+
+            // Use a small timeout to allow the UI to update before the popup attempt
+            setTimeout(() => {
+                const authWindow = window.open("${authUrl}", 'rtm_auth', 'width=800,height=600,scrollbars=yes');
+                
+                if (!authWindow || authWindow.closed || typeof authWindow.closed === 'undefined') {
+                    // Popup was blocked.
+                    statusDiv.style.display = 'none';
+                    authButton.style.display = 'inline-block';
+                    infoPara.innerHTML = '<strong class="error">Popup blocked!</strong> Please allow popups for this site and click the button again.';
+                    return;
+                }
+
+                // Popup opened successfully, start polling.
+                const checkInterval = setInterval(() => {
+                if (authWindow.closed) {
+                    clearInterval(checkInterval);
+                    statusDiv.innerHTML = '<span>Finalizing connection...</span>';
+                    window.location.href = "${ourCallbackUrl.toString()}";
+                }
+                }, 1000);
+            }, 100);
           });
         </script>
       </body>
@@ -272,14 +290,10 @@ app.get("/authorize", async (c) => {
  */
 app.get("/callback", async (c) => {
   const frob = c.req.query("frob");
-  console.log(`[/callback] Received callback for frob: ${frob}`);
   if (!frob) return c.text("Missing frob parameter", 400);
 
   const sessionJSON = await c.env.AUTH_STORE.get(`frob_session:${frob}`);
-  if (!sessionJSON) {
-    console.error(`[/callback] No session found for frob: ${frob}`);
-    return c.text("Invalid or expired session", 400);
-  }
+  if (!sessionJSON) return c.text("Invalid or expired session", 400);
   
   const session = JSON.parse(sessionJSON);
   const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
@@ -289,7 +303,6 @@ app.get("/callback", async (c) => {
     const userInfo = await api.makeRequest('rtm.auth.checkToken', { auth_token: authToken });
     const code = crypto.randomUUID();
 
-    console.log(`[/callback] Successfully exchanged frob for RTM token. Generating auth code: ${code}`);
     await c.env.AUTH_STORE.put(
       `oauth_code:${code}`,
       JSON.stringify({
@@ -307,7 +320,6 @@ app.get("/callback", async (c) => {
     redirectUrl.searchParams.set("code", code);
     redirectUrl.searchParams.set("state", session.state);
     
-    console.log(`[/callback] Redirecting back to client at: ${redirectUrl.toString()}`);
     return c.redirect(redirectUrl.toString());
 
   } catch (error: any) {
@@ -320,58 +332,46 @@ app.get("/callback", async (c) => {
  * OAuth2 Token Exchange Endpoint
  */
 app.post("/token", async (c) => {
-  console.log("[/token] Received POST request to exchange token.");
-  
   const body: any = await c.req.parseBody();
-  console.log("[/token] Request body:", JSON.stringify(body));
-
   const { grant_type, code, client_id, code_verifier } = body;
 
   if (grant_type !== "authorization_code") {
-    console.error("[/token] Invalid grant_type:", grant_type);
     return c.json({ error: "unsupported_grant_type" }, 400);
   }
   if (!code || !code_verifier) {
-    console.error("[/token] Missing code or code_verifier.");
     return c.json({ error: "invalid_request", error_description: "Missing code or code_verifier" }, 400);
   }
 
   const codeMappingJSON = await c.env.AUTH_STORE.get(`oauth_code:${code}`);
   if (!codeMappingJSON) {
-    console.error(`[/token] Invalid code provided: ${code}`);
     return c.json({ error: "invalid_grant" }, 400);
   }
-  console.log("[/token] Found matching auth code in KV store.");
 
   const codeMapping = JSON.parse(codeMappingJSON);
   await c.env.AUTH_STORE.delete(`oauth_code:${code}`);
 
   if (client_id && codeMapping.client_id !== client_id) {
-    console.error(`[/token] client_id mismatch. Expected ${codeMapping.client_id}, got ${client_id}`);
     return c.json({ error: "invalid_client" }, 400);
   }
 
-  console.log("[/token] Verifying PKCE challenge...");
   const isPkceValid = await verifyPkceChallenge(code_verifier, codeMapping.code_challenge);
-  
   if (!isPkceValid) {
-    console.error("[/token] PKCE verification FAILED.");
     return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
   }
-  console.log("[/token] PKCE verification successful. Returning access token.");
 
   return c.json({
     access_token: codeMapping.auth_token,
     token_type: "Bearer",
     scope: "delete",
-    user_name: codeMapping.user_name,
-    metadata: { user_name: codeMapping.user_name }
+    metadata: { 
+      user_name: codeMapping.user_name,
+      client_id: codeMapping.client_id
+    }
   });
 });
 
 /**
  * SSE endpoint for MCP connection
- * The 'agents' package handles extracting Bearer token and passing to DO
  */
 app.all("/sse", async (c) => {
   const auth = c.req.header("authorization");
@@ -380,20 +380,13 @@ app.all("/sse", async (c) => {
   }
   
   const token = auth.substring(7);
-  
-  // Quick validation that token looks like RTM token
   if (!token || token.length < 20) {
     return c.text("Invalid token", 401);
   }
   
-  // Get user info from token for props
   const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
   try {
-    const userInfo = await api.makeRequest('rtm.auth.checkToken', {
-      auth_token: token
-    });
-    
-    // Mount DO with props
+    const userInfo = await api.makeRequest('rtm.auth.checkToken', { auth_token: token });
     return RtmMCP.mount("/sse", {
       rtmToken: token,
       userName: userInfo.auth.user.fullname || userInfo.auth.user.username
@@ -408,7 +401,7 @@ app.all("/sse", async (c) => {
 app.get("/", (c) => {
   return c.json({
     name: "Remember The Milk MCP Server",
-    version: "2.0.0",
+    version: "2.4.0",
     endpoints: {
       authorize: "/authorize",
       token: "/token",
@@ -416,7 +409,6 @@ app.get("/", (c) => {
     }
   });
 });
-
 
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => 
