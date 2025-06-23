@@ -3,16 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2025-03-10"
 compatibility_flags = ["nodejs_compat"]
 
-# =================================================================
-# Default Environment (for local development using `wrangler dev`)
-# =================================================================
+# Production configuration is now the default
 [vars]
-SERVER_URL = "http://localhost:8787"
+SERVER_URL = "https://rtm-mcp-server-production.vcto-6e7.workers.dev"
 
 [[kv_namespaces]]
 binding = "AUTH_STORE"
 id = "7ca3e0b80b9e429488a0be33d7e259fb"
-preview_id = "7ca3e0b80b9e429488a0be33d7e259fb"
 
 [[durable_objects.bindings]]
 name = "MCP_OBJECT"
@@ -20,23 +17,4 @@ class_name = "RtmMCP"
 
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = [ "RtmMCP" ]
-
-
-# =================================================================
-# Production Environment (for deployment using `npm run deploy`)
-# =================================================================
-[env.production]
-vars = { SERVER_URL = "https://https://rtm-mcp-server-production.vcto-6e7.workers.dev" }
-
-[[env.production.kv_namespaces]]
-binding = "AUTH_STORE"
-id = "7ca3e0b80b9e429488a0be33d7e259fb"
-
-[[env.production.durable_objects.bindings]]
-name = "MCP_OBJECT"
-class_name = "RtmMCP"
-
-[[env.production.migrations]]
-tag = "v1"
-new_sqlite_classes = [ "RtmMCP" ]
+new_sqlite_classes = ["RtmMCP"]

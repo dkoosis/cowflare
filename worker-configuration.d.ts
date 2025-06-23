@@ -9,4 +9,7 @@ interface Env {
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
   SERVER_URL: string;
+  
+  // OAuth Configuration
+  COOKIE_ENCRYPTION_KEY: string;
 }

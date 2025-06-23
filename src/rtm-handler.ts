@@ -1,98 +1,213 @@
 /**
  * @file rtm-handler.ts
- * @description Manages the OAuth-like authentication flow with the Remember The Milk API.
+ * @description OAuth handler that manages RTM authentication flow
  */
 
-import { Context } from 'hono';
-import { getSession, createSession } from './workers-oauth-utils'; // Assumes the utility file from the demo exists
-import { makeRTMRequest, calculateRtmSignature } from './rtm-api';
-import type { Env } from './types';
+import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { type Context, Hono } from "hono";
+import { RtmApi } from "./rtm-api";
+import {
+  clientIdAlreadyApproved,
+  parseRedirectApproval,
+  renderApprovalDialog,
+} from "./workers-oauth-utils";
+
+const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
 
 /**
- * Handles the initial login request.
- * 1. Gets a temporary "frob" from the RTM API.
- * 2. Stores the frob in a new session.
- * 3. Builds a signed RTM auth URL.
- * 4. Redirects the user to RTM to authorize the application.
+ * OAuth authorization endpoint - shows approval dialog
  */
-async function login(c: Context<{ Bindings: Env }>) {
-  const frobResponse = await makeRTMRequest(c.env, 'rtm.auth.getFrob');
-  const frob = frobResponse?.frob;
-
-  if (!frob) {
-    return c.text('Could not retrieve Frob from RTM API.', 500);
+app.get("/authorize", async (c) => {
+  const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+  const { clientId } = oauthReqInfo;
+  if (!clientId) {
+    return c.text("Invalid request", 400);
   }
 
-  const session = await createSession(c.env.SESSION_KV, c.env.OAUTH_SESSION_SECRET);
-  session.set('rtm_frob', frob);
+  // Check if client already approved
+  if (
+    await clientIdAlreadyApproved(c.req.raw, oauthReqInfo.clientId, c.env.COOKIE_ENCRYPTION_KEY)
+  ) {
+    return redirectToRtmAuth(c, oauthReqInfo);
+  }
 
-  const authParams = {
-    api_key: c.env.RTM_API_KEY,
-    perms: 'write',
-    frob: frob,
-  };
+  // Show approval dialog
+  return renderApprovalDialog(c.req.raw, {
+    client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
+    server: {
+      name: "Remember The Milk MCP Server",
+      description: "Access your RTM tasks from Claude and other MCP clients",
+    },
+    state: { oauthReqInfo },
+  });
+});
 
-  const apiSig = calculateRtmSignature(authParams, c.env.RTM_SHARED_SECRET);
-  const authUrl = `https://www.rememberthemilk.com/services/auth/?${new URLSearchParams({ ...authParams, api_sig: apiSig })}`;
+/**
+ * Handle approval form submission
+ */
+app.post("/authorize", async (c) => {
+  const { state, headers } = await parseRedirectApproval(c.req.raw, c.env.COOKIE_ENCRYPTION_KEY);
+  if (!state.oauthReqInfo) {
+    return c.text("Invalid request", 400);
+  }
 
-  // Set the session cookie and redirect the user
-  const headers = {
-    'Set-Cookie': await session.commit(),
-    Location: authUrl,
-  };
+  return redirectToRtmAuth(c, state.oauthReqInfo, headers);
+});
 
-  return new Response(null, { status: 302, headers });
+/**
+ * Redirect to RTM authentication
+ */
+async function redirectToRtmAuth(
+  c: Context,
+  oauthReqInfo: AuthRequest,
+  headers: Record<string, string> = {},
+) {
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  
+  // Get frob from RTM
+  const frob = await api.getFrob();
+  
+  // Store OAuth request info with frob in KV
+  await c.env.AUTH_STORE.put(
+    `oauth:${frob}`,
+    JSON.stringify({
+      oauthReqInfo,
+      timestamp: Date.now()
+    }),
+    { expirationTtl: 300 } // 5 minutes
+  );
+  
+  // Get RTM auth URL
+  const rtmAuthUrl = await api.getAuthUrl(frob, 'delete');
+  
+  // Build callback URL that includes frob
+  const callbackUrl = new URL("/callback", c.req.url);
+  callbackUrl.searchParams.set("frob", frob);
+  
+  // Show RTM auth page
+  return new Response(
+    `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Authenticate with Remember The Milk</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f9fafb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+          }
+          .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            max-width: 400px;
+            text-align: center;
+          }
+          h1 { color: #333; margin-bottom: 1.5rem; }
+          .button {
+            display: inline-block;
+            background: #0073e6;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            margin: 0.5rem;
+          }
+          .button:hover { background: #005bb5; }
+          .secondary { background: #6c757d; }
+          .secondary:hover { background: #5a6268; }
+          .info { color: #666; margin: 1rem 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Connect to Remember The Milk</h1>
+          <p class="info">
+            To use RTM tools in your MCP client, you need to authorize access to your RTM account.
+          </p>
+          <p>
+            <a href="${rtmAuthUrl}" target="_blank" class="button">
+              Authorize with RTM
+            </a>
+          </p>
+          <p class="info">
+            After authorizing, click below to complete setup:
+          </p>
+          <p>
+            <a href="${callbackUrl.toString()}" class="button secondary">
+              Complete Setup
+            </a>
+          </p>
+        </div>
+      </body>
+    </html>`,
+    {
+      status: 200,
+      headers: {
+        ...headers,
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    }
+  );
 }
 
 /**
- * Handles the callback from RTM after the user grants authorization.
- * 1. Retrieves the frob from the user's session.
- * 2. Exchanges the authorized frob for a permanent authentication token.
- * 3. Stores the permanent token in the session, removing the temporary frob.
- * 4. Redirects the user to the application's home page.
+ * OAuth callback endpoint - exchanges frob for token and completes OAuth flow
  */
-async function callback(c: Context<{ Bindings: Env }>) {
-  const session = await getSession(c.req.raw, c.env.SESSION_KV, c.env.OAUTH_SESSION_SECRET);
-  if (!session) {
-    return c.text('Invalid session. Please try logging in again.', 401);
+app.get("/callback", async (c) => {
+  const frob = c.req.query("frob");
+  if (!frob) {
+    return c.text("Missing frob parameter", 400);
   }
 
-  const frob = session.get('rtm_frob');
-  if (!frob) {
-    return c.text('No frob found in session. Please try logging in again.', 400);
+  // Retrieve OAuth request info
+  const oauthData = await c.env.AUTH_STORE.get(`oauth:${frob}`);
+  if (!oauthData) {
+    return c.text("Invalid or expired session", 400);
   }
+
+  const { oauthReqInfo } = JSON.parse(oauthData);
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
 
   try {
-    const tokenResponse = await makeRTMRequest(c.env, 'rtm.auth.getToken', { frob });
-    const authToken = tokenResponse?.auth?.token;
+    // Exchange frob for RTM token
+    const rtmToken = await api.getToken(frob);
+    
+    // Get user info from RTM
+    const userInfo = await api.makeRequest('rtm.auth.checkToken', {
+      auth_token: rtmToken
+    });
 
-    if (!authToken) {
-      throw new Error('Authentication failed. A token was not received from RTM.');
-    }
+    // Clean up temporary data
+    await c.env.AUTH_STORE.delete(`oauth:${frob}`);
 
-    session.set('rtm_auth_token', authToken);
-    session.unset('rtm_frob');
+    // Complete OAuth authorization
+    const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
+      metadata: {
+        label: userInfo.auth.user.username,
+      },
+      props: {
+        rtmToken,
+        userEmail: userInfo.auth.user.username, // RTM doesn't provide email
+        userName: userInfo.auth.user.fullname || userInfo.auth.user.username,
+      },
+      request: oauthReqInfo,
+      scope: oauthReqInfo.scope,
+      userId: userInfo.auth.user.id,
+    });
 
-    const headers = {
-      'Set-Cookie': await session.commit(),
-      Location: '/',
-    };
-    return new Response('Login Successful! Redirecting...', { status: 302, headers });
-
-  } catch (error: any) {
-    return c.text(`Error authenticating with RTM: ${error.message}`, 500);
+    return Response.redirect(redirectTo);
+    
+  } catch (error) {
+    console.error("RTM authentication failed:", error);
+    return c.text(`Authentication failed: ${error.message}`, 401);
   }
-}
+});
 
-/**
- * Handles the logout request by destroying the current session.
- */
-async function logout(c: Context<{ Bindings: Env }>) {
-  const session = await getSession(c.req.raw, c.env.SESSION_KV, c.env.OAUTH_SESSION_SECRET);
-  if (session) {
-    await session.destroy();
-  }
-  return c.redirect('/');
-}
-
-export const rtm = { login, callback, logout };
+export { app as RtmHandler };
