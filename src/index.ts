@@ -1,14 +1,33 @@
 /**
- * @file index.ts
- * @description Main entry point for RTM MCP Server with OAuth
- * OAuth provider for MCP clients with RTM backend authentication
+ * RTM MCP Server - Simplified OAuth2 Adapter Architecture
+ * 
+ * ARCHITECTURAL OVERVIEW:
+ * This server provides an OAuth2-compatible interface for MCP clients (like Claude.ai)
+ * while internally using Remember The Milk's custom frob-based authentication.
+ * 
+ * KEY PRINCIPLES:
+ * 1. NO USER DATABASE - We only store temporary session data and tokens
+ * 2. STATELESS OPERATION - Tokens are stored only for active MCP sessions
+ * 3. OAUTH2 ADAPTER - We present standard OAuth2 endpoints but use RTM's flow internally
+ * 
+ * FLOW:
+ * 1. MCP client requests /oauth/authorize
+ * 2. We get RTM frob, store session temporarily, redirect to RTM
+ * 3. User authorizes at RTM and returns to /oauth/callback
+ * 4. We exchange frob for RTM token, generate OAuth code
+ * 5. MCP client exchanges code for token at /oauth/token
+ * 6. Token is passed to Durable Object for the session
+ * 
+ * STORAGE:
+ * - AUTH_STORE KV: Temporary session data (expires in 10 min)
+ * - Durable Object: Token for active MCP session only
  */
+// File: srcs/index.ts
 
-import OAuthProvider from "@cloudflare/workers-oauth-provider";
+import { Hono } from "hono";
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { RtmHandler } from "./rtm-handler";
 import { RtmApi } from "./rtm-api";
 import * as schemas from "./schemas";
 import { toInputSchema } from "./schemas/index";
@@ -16,12 +35,15 @@ import { toInputSchema } from "./schemas/index";
 // Props passed to MCP agent after OAuth
 type Props = {
   rtmToken: string;
-  userEmail: string;
   userName: string;
 };
 
 type State = null;
 
+/**
+ * MCP Durable Object - Handles the actual MCP connection
+ * Stores RTM token only for the duration of the active session
+ */
 export class RtmMCP extends McpAgent<Env, State, Props> {
   server = new McpServer({
     name: "Remember The Milk MCP Server",
@@ -30,30 +52,12 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
 
   private api: RtmApi;
 
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env);
-    console.log('[RtmMCP] Constructor called', {
-      hasState: !!state,
-      hasEnv: !!env,
-      envKeys: Object.keys(env || {})
-    });
-  }
-
   async init() {
-    console.log('[RtmMCP] Init called with props:', {
-      props: this.props,
-      hasRtmToken: !!this.props?.rtmToken,
-      userName: this.props?.userName,
-      userEmail: this.props?.userEmail
-    });
-
     if (!this.props?.rtmToken) {
-      console.error('[RtmMCP] No RTM token in props!');
       throw new Error('RTM token required');
     }
 
     this.api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-    console.log('[RtmMCP] RTM API initialized');
 
     // Test Connection Tool
     this.server.tool(
@@ -62,24 +66,17 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
         description: "Test the MCP server connection",
         inputSchema: toInputSchema(z.object({}))
       },
-      async () => {
-        console.log('[RtmMCP] test_connection tool called');
-        return {
-          content: [{
-            type: "text",
-            text: `✅ Connection successful! Server is running RTM MCP Server v2.0.0.
-
-Connected as: ${this.props.userName} (${this.props.userEmail})
-
-The RTM MCP Server is ready to help you manage your tasks. Available tools include:
+      async () => ({
+        content: [{
+          type: "text",
+          text: `✅ Connection successful! Connected as: ${this.props.userName}\n\nAvailable tools:
 - rtm_get_lists: Get all your RTM lists
-- rtm_add_task: Add new tasks with optional due dates, priorities, and tags
+- rtm_add_task: Add new tasks
 - rtm_complete_task: Mark tasks as complete
-- rtm_get_tasks: Get tasks from specific lists with filters
-- rtm_search_tasks: Search tasks using RTM's powerful query syntax`
-          }]
-        };
-      }
+- rtm_get_tasks: Get tasks from lists
+- rtm_search_tasks: Search tasks`
+        }]
+      })
     );
 
     // Get Lists Tool
@@ -87,25 +84,18 @@ The RTM MCP Server is ready to help you manage your tasks. Available tools inclu
       "rtm_get_lists",
       {
         description: "Get all RTM lists",
-        inputSchema: toInputSchema(schemas.GetListsSchema.omit({ auth_token: true }))
+        inputSchema: toInputSchema(z.object({}))
       },
       async () => {
-        console.log('[RtmMCP] rtm_get_lists tool called');
-        try {
-          const response = await this.api.makeRequest('rtm.lists.getList', {
-            auth_token: this.props.rtmToken
-          });
-          console.log('[RtmMCP] rtm_get_lists response:', response);
-          return {
-            content: [{
-              type: "text",
-              text: this.api.formatLists(response.lists.list)
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_get_lists error:', error);
-          throw error;
-        }
+        const response = await this.api.makeRequest('rtm.lists.getList', {
+          auth_token: this.props.rtmToken
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatLists(response.lists.list)
+          }]
+        };
       }
     );
 
@@ -114,33 +104,21 @@ The RTM MCP Server is ready to help you manage your tasks. Available tools inclu
       "rtm_add_task",
       {
         description: "Add a new task to RTM",
-        inputSchema: toInputSchema(schemas.AddTaskSchema.omit({ auth_token: true }))
+        inputSchema: toInputSchema(schemas.AddTaskSchema.omit({ auth_token: true, timeline: true }))
       },
-      async ({ name, list_id, due, priority, tags, notes }) => {
-        console.log('[RtmMCP] rtm_add_task called with:', { name, list_id, due, priority, tags, notes });
-        try {
-          const timeline = await this.api.createTimeline(this.props.rtmToken);
-          const response = await this.api.makeRequest('rtm.tasks.add', {
-            auth_token: this.props.rtmToken,
-            timeline,
-            name,
-            list_id,
-            due,
-            priority,
-            tags,
-            notes
-          });
-          console.log('[RtmMCP] rtm_add_task response:', response);
-          return {
-            content: [{
-              type: "text",
-              text: `Task added successfully: ${response.list.taskseries.name} (ID: ${response.list.taskseries.id})`
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_add_task error:', error);
-          throw error;
-        }
+      async (args) => {
+        const timeline = await this.api.createTimeline(this.props.rtmToken);
+        const response = await this.api.makeRequest('rtm.tasks.add', {
+          auth_token: this.props.rtmToken,
+          timeline,
+          ...args
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `Task added: ${response.list.taskseries.name} (ID: ${response.list.taskseries.id})`
+          }]
+        };
       }
     );
 
@@ -149,30 +127,23 @@ The RTM MCP Server is ready to help you manage your tasks. Available tools inclu
       "rtm_complete_task",
       {
         description: "Mark a task as complete",
-        inputSchema: toInputSchema(schemas.CompleteTaskSchema.omit({ auth_token: true }))
+        inputSchema: toInputSchema(schemas.CompleteTaskSchema.omit({ auth_token: true, timeline: true }))
       },
       async ({ list_id, taskseries_id, task_id }) => {
-        console.log('[RtmMCP] rtm_complete_task called with:', { list_id, taskseries_id, task_id });
-        try {
-          const timeline = await this.api.createTimeline(this.props.rtmToken);
-          await this.api.makeRequest('rtm.tasks.complete', {
-            auth_token: this.props.rtmToken,
-            timeline,
-            list_id,
-            taskseries_id,
-            task_id
-          });
-          console.log('[RtmMCP] rtm_complete_task success');
-          return {
-            content: [{
-              type: "text",
-              text: `Task completed successfully`
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_complete_task error:', error);
-          throw error;
-        }
+        const timeline = await this.api.createTimeline(this.props.rtmToken);
+        await this.api.makeRequest('rtm.tasks.complete', {
+          auth_token: this.props.rtmToken,
+          timeline,
+          list_id,
+          taskseries_id,
+          task_id
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `Task completed successfully`
+          }]
+        };
       }
     );
 
@@ -183,26 +154,17 @@ The RTM MCP Server is ready to help you manage your tasks. Available tools inclu
         description: "Get tasks from RTM lists",
         inputSchema: toInputSchema(schemas.GetTasksSchema.omit({ auth_token: true }))
       },
-      async ({ list_id, filter, last_sync }) => {
-        console.log('[RtmMCP] rtm_get_tasks called with:', { list_id, filter, last_sync });
-        try {
-          const response = await this.api.makeRequest('rtm.tasks.getList', {
-            auth_token: this.props.rtmToken,
-            list_id,
-            filter,
-            last_sync
-          });
-          console.log('[RtmMCP] rtm_get_tasks response:', response);
-          return {
-            content: [{
-              type: "text",
-              text: this.api.formatTasks(response.tasks.list)
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_get_tasks error:', error);
-          throw error;
-        }
+      async (args) => {
+        const response = await this.api.makeRequest('rtm.tasks.getList', {
+          auth_token: this.props.rtmToken,
+          ...args
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatTasks(response.tasks.list)
+          }]
+        };
       }
     );
 
@@ -214,172 +176,308 @@ The RTM MCP Server is ready to help you manage your tasks. Available tools inclu
         inputSchema: toInputSchema(schemas.SearchTasksSchema.omit({ auth_token: true }))
       },
       async ({ query }) => {
-        console.log('[RtmMCP] rtm_search_tasks called with query:', query);
-        try {
-          const response = await this.api.makeRequest('rtm.tasks.getList', {
-            auth_token: this.props.rtmToken,
-            filter: query
-          });
-          console.log('[RtmMCP] rtm_search_tasks response:', response);
-          return {
-            content: [{
-              type: "text",
-              text: this.api.formatTasks(response.tasks.list)
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_search_tasks error:', error);
-          throw error;
-        }
+        const response = await this.api.makeRequest('rtm.tasks.getList', {
+          auth_token: this.props.rtmToken,
+          filter: query
+        });
+        return {
+          content: [{
+            type: "text",
+            text: this.api.formatTasks(response.tasks.list)
+          }]
+        };
       }
     );
-
-    // Update Task Tool
-    this.server.tool(
-      "rtm_update_task",
-      {
-        description: "Update an existing task",
-        inputSchema: toInputSchema(schemas.UpdateTaskSchema.omit({ auth_token: true }))
-      },
-      async ({ list_id, taskseries_id, task_id, name, due, priority, estimate, tags, notes }) => {
-        console.log('[RtmMCP] rtm_update_task called with:', { list_id, taskseries_id, task_id, name, due, priority, estimate, tags, notes });
-        try {
-          const timeline = await this.api.createTimeline(this.props.rtmToken);
-          const updates: any = {};
-          
-          if (name !== undefined) updates.name = name;
-          if (due !== undefined) updates.due = due;
-          if (priority !== undefined) updates.priority = priority;
-          if (estimate !== undefined) updates.estimate = estimate;
-          if (tags !== undefined) updates.tags = tags;
-          
-          const results = [];
-          
-          // RTM requires separate API calls for different updates
-          for (const [field, value] of Object.entries(updates)) {
-            const method = `rtm.tasks.set${field.charAt(0).toUpperCase() + field.slice(1)}`;
-            console.log('[RtmMCP] Calling RTM method:', method, 'with value:', value);
-            await this.api.makeRequest(method, {
-              auth_token: this.props.rtmToken,
-              timeline,
-              list_id,
-              taskseries_id,
-              task_id,
-              [field]: value
-            });
-            results.push(`${field}: ${value}`);
-          }
-          
-          // Handle notes separately if provided
-          if (notes !== undefined) {
-            console.log('[RtmMCP] Adding note:', notes);
-            await this.api.makeRequest('rtm.tasks.notes.add', {
-              auth_token: this.props.rtmToken,
-              timeline,
-              list_id,
-              taskseries_id,
-              task_id,
-              note_title: 'Note',
-              note_text: notes
-            });
-            results.push(`notes: ${notes}`);
-          }
-          
-          console.log('[RtmMCP] rtm_update_task success');
-          return {
-            content: [{
-              type: "text",
-              text: `Task updated successfully. Changed: ${results.join(', ')}`
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_update_task error:', error);
-          throw error;
-        }
-      }
-    );
-
-    // Delete Task Tool
-    this.server.tool(
-      "rtm_delete_task",
-      {
-        description: "Delete a task",
-        inputSchema: toInputSchema(schemas.DeleteTaskSchema.omit({ auth_token: true }))
-      },
-      async ({ list_id, taskseries_id, task_id }) => {
-        console.log('[RtmMCP] rtm_delete_task called with:', { list_id, taskseries_id, task_id });
-        try {
-          const timeline = await this.api.createTimeline(this.props.rtmToken);
-          await this.api.makeRequest('rtm.tasks.delete', {
-            auth_token: this.props.rtmToken,
-            timeline,
-            list_id,
-            taskseries_id,
-            task_id
-          });
-          console.log('[RtmMCP] rtm_delete_task success');
-          return {
-            content: [{
-              type: "text",
-              text: `Task deleted successfully`
-            }]
-          };
-        } catch (error) {
-          console.error('[RtmMCP] rtm_delete_task error:', error);
-          throw error;
-        }
-      }
-    );
-
-    console.log('[RtmMCP] Tool registration complete. Total tools registered:', 8);
   }
 }
 
-// Create OAuth provider with RTM handler as the auth flow
-const oauthProvider = new OAuthProvider({
-  apiHandler: RtmMCP.mount("/sse") as any,
-  apiRoute: "/sse",
-  authorizeEndpoint: "/authorize",
-  clientRegistrationEndpoint: "/register",
-  defaultHandler: RtmHandler as any,
-  tokenEndpoint: "/token",
+/**
+ * Main HTTP handler - Provides OAuth2 adapter endpoints
+ * NO USER DATABASE - Only temporary session management
+ */
+const app = new Hono<{ Bindings: Env }>();
+
+/**
+ * OAuth2 Authorization Endpoint
+ * Initiates RTM authentication flow while presenting OAuth2 interface
+ */
+app.get("/oauth/authorize", async (c) => {
+  const { response_type, client_id, redirect_uri, state, scope } = c.req.query();
+  
+  // Validate OAuth2 parameters
+  if (response_type !== "code") {
+    return c.text("unsupported_response_type", 400);
+  }
+  
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  
+  // Get RTM frob (their temporary auth token)
+  const frob = await api.getFrob();
+  
+  // Generate session ID for temporary storage
+  const sessionId = crypto.randomUUID();
+  
+  // Store OAuth session temporarily (10 minutes)
+  // This is NOT a user database - just temporary flow state
+  await c.env.AUTH_STORE.put(
+    `oauth_session:${sessionId}`,
+    JSON.stringify({
+      frob,
+      state,
+      redirect_uri,
+      client_id,
+      created_at: Date.now()
+    }),
+    { expirationTtl: 600 } // 10 minutes
+  );
+  
+  // Store reverse mapping for callback
+  await c.env.AUTH_STORE.put(
+    `frob_session:${frob}`,
+    sessionId,
+    { expirationTtl: 600 }
+  );
+  
+  // Build RTM auth URL
+  const perms = scope === "read" ? "read" : "delete";
+  const authUrl = await api.getAuthUrl(frob, perms);
+  
+  // Build callback URL for after RTM auth
+  const callbackUrl = new URL("/oauth/callback", c.req.url);
+  callbackUrl.searchParams.set("frob", frob);
+  
+  // Show auth page with RTM redirect
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Connect to Remember The Milk</title>
+        <style>
+          body {
+            font-family: system-ui, sans-serif;
+            background: #f9fafb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+          }
+          .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            max-width: 400px;
+            text-align: center;
+          }
+          .button {
+            display: inline-block;
+            background: #0073e6;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            margin: 0.5rem;
+          }
+          .button:hover { background: #005bb5; }
+          .secondary { background: #6c757d; }
+          .secondary:hover { background: #5a6268; }
+          .info { color: #666; margin: 1rem 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Connect to Remember The Milk</h1>
+          <p class="info">
+            To use RTM tools in your MCP client, authorize access to your RTM account.
+          </p>
+          <p>
+            <a href="${authUrl}" target="_blank" class="button">
+              Authorize with RTM
+            </a>
+          </p>
+          <p class="info">
+            After authorizing in RTM, click below to complete setup:
+          </p>
+          <p>
+            <a href="${callbackUrl.toString()}" class="button secondary">
+              Complete Setup
+            </a>
+          </p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
-console.log('[Main] OAuth provider created with routes:', {
-  apiRoute: '/sse',
-  authorizeEndpoint: '/authorize',
-  tokenEndpoint: '/token',
-  registrationEndpoint: '/register'
+/**
+ * RTM Callback Handler
+ * Completes the OAuth2 flow after RTM authorization
+ */
+app.get("/oauth/callback", async (c) => {
+  const frob = c.req.query("frob");
+  
+  if (!frob) {
+    return c.text("Missing frob parameter", 400);
+  }
+  
+  // Retrieve session from temporary storage
+  const sessionId = await c.env.AUTH_STORE.get(`frob_session:${frob}`);
+  if (!sessionId) {
+    return c.text("Invalid or expired session", 400);
+  }
+  
+  const sessionData = await c.env.AUTH_STORE.get(`oauth_session:${sessionId}`);
+  if (!sessionData) {
+    return c.text("Session data not found", 400);
+  }
+  
+  const session = JSON.parse(sessionData);
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  
+  try {
+    // Exchange frob for permanent RTM token
+    const authToken = await api.getToken(frob);
+    
+    // Get user info
+    const userInfo = await api.makeRequest('rtm.auth.checkToken', {
+      auth_token: authToken
+    });
+    
+    // Generate OAuth authorization code
+    const code = crypto.randomUUID();
+    
+    // Store code->token mapping temporarily (10 minutes)
+    // This allows the OAuth token exchange to work
+    await c.env.AUTH_STORE.put(
+      `oauth_code:${code}`,
+      JSON.stringify({
+        auth_token: authToken,
+        user_name: userInfo.auth.user.fullname || userInfo.auth.user.username,
+        client_id: session.client_id,
+        created_at: Date.now()
+      }),
+      { expirationTtl: 600 }
+    );
+    
+    // Clean up session data
+    await c.env.AUTH_STORE.delete(`oauth_session:${sessionId}`);
+    await c.env.AUTH_STORE.delete(`frob_session:${frob}`);
+    
+    // Redirect back to client with code
+    const redirectUrl = new URL(session.redirect_uri);
+    redirectUrl.searchParams.set("code", code);
+    if (session.state) {
+      redirectUrl.searchParams.set("state", session.state);
+    }
+    
+    return c.redirect(redirectUrl.toString());
+    
+  } catch (error) {
+    console.error("RTM authentication failed:", error);
+    return c.text(`Authentication failed: ${error.message}`, 401);
+  }
+});
+
+/**
+ * OAuth2 Token Exchange Endpoint
+ * Exchanges authorization code for access token
+ */
+app.post("/oauth/token", async (c) => {
+  const contentType = c.req.header("content-type");
+  let body: any;
+  
+  if (contentType?.includes("application/json")) {
+    body = await c.req.json();
+  } else {
+    body = await c.req.parseBody();
+  }
+  
+  const { grant_type, code, client_id } = body;
+  
+  if (grant_type !== "authorization_code") {
+    return c.json({ error: "unsupported_grant_type" }, 400);
+  }
+  
+  // Retrieve token from temporary storage
+  const codeMappingData = await c.env.AUTH_STORE.get(`oauth_code:${code}`);
+  if (!codeMappingData) {
+    return c.json({ error: "invalid_grant" }, 400);
+  }
+  
+  const codeMapping = JSON.parse(codeMappingData);
+  
+  // Validate client_id if provided
+  if (client_id && codeMapping.client_id !== client_id) {
+    return c.json({ error: "invalid_client" }, 400);
+  }
+  
+  // Clean up code (one-time use)
+  await c.env.AUTH_STORE.delete(`oauth_code:${code}`);
+  
+  // Return OAuth2 token response
+  // The token is the RTM auth token, which will be passed to the Durable Object
+  return c.json({
+    access_token: codeMapping.auth_token,
+    token_type: "Bearer",
+    scope: "delete",
+    // Include metadata for the MCP connection
+    metadata: {
+      user_name: codeMapping.user_name
+    }
+  });
+});
+
+/**
+ * SSE endpoint for MCP connection
+ * The 'agents' package handles extracting Bearer token and passing to DO
+ */
+app.all("/sse", async (c) => {
+  const auth = c.req.header("authorization");
+  if (!auth?.startsWith("Bearer ")) {
+    return c.text("Unauthorized", 401);
+  }
+  
+  const token = auth.substring(7);
+  
+  // Quick validation that token looks like RTM token
+  if (!token || token.length < 20) {
+    return c.text("Invalid token", 401);
+  }
+  
+  // Get user info from token for props
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  try {
+    const userInfo = await api.makeRequest('rtm.auth.checkToken', {
+      auth_token: token
+    });
+    
+    // Mount DO with props
+    return RtmMCP.mount("/sse", {
+      rtmToken: token,
+      userName: userInfo.auth.user.fullname || userInfo.auth.user.username
+    })(c.req.raw, c.env, c.executionCtx);
+    
+  } catch (error) {
+    return c.text("Invalid token", 401);
+  }
+});
+
+// Health check endpoint
+app.get("/", (c) => {
+  return c.json({
+    name: "Remember The Milk MCP Server",
+    version: "2.0.0",
+    endpoints: {
+      oauth_authorize: "/oauth/authorize",
+      oauth_token: "/oauth/token",
+      mcp_sse: "/sse"
+    }
+  });
 });
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
-    console.log('[Main] Fetch called:', {
-      method: request.method,
-      pathname: url.pathname,
-      search: url.search,
-      headers: {
-        authorization: request.headers.get('authorization'),
-        contentType: request.headers.get('content-type'),
-        accept: request.headers.get('accept'),
-      }
-    });
-    
-    try {
-      const response = await oauthProvider.fetch(request, env, ctx);
-      console.log('[Main] Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: {
-          contentType: response.headers.get('content-type'),
-          location: response.headers.get('location'),
-        }
-      });
-      return response;
-    } catch (error) {
-      console.error('[Main] Error in fetch:', error);
-      throw error;
-    }
-  }
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) => 
+    app.fetch(request, env, ctx)
 };
