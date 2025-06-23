@@ -199,128 +199,95 @@ const app = new Hono<{ Bindings: Env }>();
 
 /**
  * OAuth2 Authorization Endpoint
- * Initiates RTM authentication flow while presenting OAuth2 interface
+ * Initiates RTM authentication flow by serving a self-contained HTML page.
+ * This page manages the non-standard RTM auth flow (which lacks an automatic redirect)
+ * and bridges it to the standard OAuth2 flow expected by clients like Claude.ai.
  */
 app.get("/oauth/authorize", async (c) => {
-  try {
-    const { RTM_API_KEY, RTM_SHARED_SECRET } = c.env;
-    
-    if (!RTM_API_KEY || !RTM_SHARED_SECRET) {
-      console.error("Server configuration error: RTM_API_KEY or RTM_SHARED_SECRET is not set.");
-      return c.text("Server is not configured correctly. Missing API credentials.", 500);
-    }
-    
-    const { 
-      response_type, 
-      client_id, 
-      redirect_uri, 
-      state, 
-      scope,
-      code_challenge,
-      code_challenge_method 
-    } = c.req.query();
-    
-    if (response_type !== "code") {
-      return c.text("unsupported_response_type", 400);
-    }
-    
-    const api = new RtmApi(RTM_API_KEY, RTM_SHARED_SECRET);
-    const frob = await api.getFrob();
-    const sessionId = crypto.randomUUID();
-    
-    // Store OAuth session with PKCE parameters
-    await c.env.AUTH_STORE.put(
-      `oauth_session:${sessionId}`,
-      JSON.stringify({
-        frob,
-        state,
-        redirect_uri,
-        client_id,
-        code_challenge,
-        code_challenge_method,
-        created_at: Date.now()
-      }),
-      { expirationTtl: 600 }
-    );
-    
-    await c.env.AUTH_STORE.put(
-      `frob_session:${frob}`,
-      sessionId,
-      { expirationTtl: 600 }
-    );
-    
-    const perms = scope === "read" ? "read" : "delete";
-    const authUrl = await api.getAuthUrl(frob, perms);
-    const callbackUrl = new URL("/oauth/callback", c.req.url);
-    callbackUrl.searchParams.set("frob", frob);
-    
-    return c.html(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Connect to Remember The Milk</title>
-          <style>
-            body {
-              font-family: system-ui, sans-serif;
-              background: #f9fafb;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              margin: 0;
-            }
-            .container {
-              background: white;
-              padding: 2rem;
-              border-radius: 8px;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-              max-width: 400px;
-              text-align: center;
-            }
-            .button {
-              display: inline-block;
-              background: #0073e6;
-              color: white;
-              padding: 0.75rem 2rem;
-              border-radius: 6px;
-              text-decoration: none;
-              margin: 0.5rem;
-            }
-            .button:hover { background: #005bb5; }
-            .secondary { background: #6c757d; }
-            .secondary:hover { background: #5a6268; }
-            .info { color: #666; margin: 1rem 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Connect to Remember The Milk</h1>
-            <p class="info">
-              To use RTM tools in your MCP client, authorize access to your RTM account.
-            </p>
-            <p>
-              <a href="${authUrl}" target="_blank" class="button">
-                Authorize with RTM
-              </a>
-            </p>
-            <p class="info">
-              After authorizing in RTM, click below to complete setup:
-            </p>
-            <p>
-              <a href="${callbackUrl.toString()}" class="button secondary">
-                Complete Setup
-              </a>
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error("OAuth authorize error:", error);
-    return c.text(`Authorization error: ${error.message}`, 500);
+  const { response_type, client_id, redirect_uri, state, scope } = c.req.query();
+
+  // Validate standard OAuth2 parameters
+  if (response_type !== "code" || !client_id || !redirect_uri || !state) {
+    return c.text("invalid_request: missing required parameters", 400);
   }
+
+  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  const frob = await api.getFrob();
+
+  // Store the original request details, keyed by the frob.
+  // This is crucial for retrieving the state and client's redirect_uri later.
+  await c.env.AUTH_STORE.put(
+    `frob_session:${frob}`,
+    JSON.stringify({ state, redirect_uri, client_id }),
+    { expirationTtl: 600 } // 10 minutes
+  );
+
+  const perms = scope === "read" ? "read" : "delete";
+  const authUrl = await api.getAuthUrl(frob, perms);
+
+  // This is the URL on our own server that the page will call once the RTM popup is closed.
+  const ourCallbackUrl = new URL("/oauth/callback", c.req.url);
+  ourCallbackUrl.searchParams.set("frob", frob);
+
+  // Return the HTML page that will manage the popup and polling logic.
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Connect to Remember The Milk</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+          .container { background: white; padding: 2.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; text-align: center; }
+          h1 { margin-top: 0; }
+          .button { display: inline-block; background: #007aff; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; border: none; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+          .button:hover { background: #0056b3; }
+          .info { color: #666; margin: 1.5rem 0; line-height: 1.5; }
+          .status { display: none; align-items: center; justify-content: center; margin-top: 1.5rem; }
+          .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #007aff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin-right: 10px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Connect to Remember The Milk</h1>
+          <p class="info">Click below to open the RTM authorization window. After you grant access, please close that window to complete the connection.</p>
+          <button id="authButton" class="button">Connect to RTM</button>
+          <div id="status" class="status">
+            <div class="spinner"></div>
+            <span>Waiting for authorization...</span>
+          </div>
+        </div>
+        <script>
+          const authButton = document.getElementById('authButton');
+          const statusDiv = document.getElementById('status');
+          
+          authButton.addEventListener('click', () => {
+            const rtmAuthUrl = "${authUrl}";
+            const ourCallbackUrl = "${ourCallbackUrl.toString()}";
+            
+            const authWindow = window.open(rtmAuthUrl, 'rtm_auth', 'width=800,height=600,scrollbars=yes');
+            
+            authButton.style.display = 'none';
+            statusDiv.style.display = 'flex';
+            
+            const checkInterval = setInterval(() => {
+              if (authWindow && authWindow.closed) {
+                clearInterval(checkInterval);
+                statusDiv.innerHTML = '<span>Finalizing connection...</span>';
+                // The popup is closed, now we trigger our own callback to get the token and redirect.
+                window.location.href = ourCallbackUrl;
+              }
+            }, 1000);
+          });
+        </script>
+      </body>
+    </html>
+  `);
 });
+
+
 /**
  * RTM Callback Handler
  * Completes the OAuth2 flow after RTM authorization
@@ -487,54 +454,6 @@ app.get("/", (c) => {
   });
 });
 
-// OAuth2 Authorization Server Metadata (Discovery)
-app.get("/.well-known/oauth-authorization-server", (c) => {
-  const baseUrl = new URL(c.req.url).origin;
-  
-  return c.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/oauth/authorize`,
-    token_endpoint: `${baseUrl}/oauth/token`,
-    registration_endpoint: `${baseUrl}/register`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
-    token_endpoint_auth_methods_supported: ["none"],
-    code_challenge_methods_supported: ["S256"]
-  });
-});
-
-// Dynamic Client Registration
-app.post("/register", async (c) => {
-  const body = await c.req.json();
-  const { client_name, redirect_uris } = body;
-  
-  if (!client_name || !redirect_uris || !Array.isArray(redirect_uris)) {
-    return c.json({ error: "invalid_client_metadata" }, 400);
-  }
-  
-  // Generate client_id
-  const client_id = crypto.randomUUID();
-  
-  // Store client registration (optional - you can skip this if accepting any client)
-  await c.env.AUTH_STORE.put(
-    `client:${client_id}`,
-    JSON.stringify({
-      client_name,
-      redirect_uris,
-      created_at: Date.now()
-    }),
-    { expirationTtl: 86400 * 30 } // 30 days
-  );
-  
-  return c.json({
-    client_id,
-    client_name,
-    redirect_uris,
-    grant_types: ["authorization_code"],
-    response_types: ["code"],
-    token_endpoint_auth_method: "none"
-  }, 201);
-});
 
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => 
