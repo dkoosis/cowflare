@@ -1,7 +1,3 @@
-Of course. Here is the provided information on Remember The Milk authentication, converted into an Architecture Decision Record (ADR) that fits the existing documentation structure.
-
-***
-
 ### ADR 005: Remember The Milk (RTM) Authentication Mechanism
 
 **Status**: Accepted
