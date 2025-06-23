@@ -202,115 +202,125 @@ const app = new Hono<{ Bindings: Env }>();
  * Initiates RTM authentication flow while presenting OAuth2 interface
  */
 app.get("/oauth/authorize", async (c) => {
-  const { response_type, client_id, redirect_uri, state, scope } = c.req.query();
-  
-  // Validate OAuth2 parameters
-  if (response_type !== "code") {
-    return c.text("unsupported_response_type", 400);
+  try {
+    const { RTM_API_KEY, RTM_SHARED_SECRET } = c.env;
+    
+    if (!RTM_API_KEY || !RTM_SHARED_SECRET) {
+      console.error("Server configuration error: RTM_API_KEY or RTM_SHARED_SECRET is not set.");
+      return c.text("Server is not configured correctly. Missing API credentials.", 500);
+    }
+    
+    const { 
+      response_type, 
+      client_id, 
+      redirect_uri, 
+      state, 
+      scope,
+      code_challenge,
+      code_challenge_method 
+    } = c.req.query();
+    
+    if (response_type !== "code") {
+      return c.text("unsupported_response_type", 400);
+    }
+    
+    const api = new RtmApi(RTM_API_KEY, RTM_SHARED_SECRET);
+    const frob = await api.getFrob();
+    const sessionId = crypto.randomUUID();
+    
+    // Store OAuth session with PKCE parameters
+    await c.env.AUTH_STORE.put(
+      `oauth_session:${sessionId}`,
+      JSON.stringify({
+        frob,
+        state,
+        redirect_uri,
+        client_id,
+        code_challenge,
+        code_challenge_method,
+        created_at: Date.now()
+      }),
+      { expirationTtl: 600 }
+    );
+    
+    await c.env.AUTH_STORE.put(
+      `frob_session:${frob}`,
+      sessionId,
+      { expirationTtl: 600 }
+    );
+    
+    const perms = scope === "read" ? "read" : "delete";
+    const authUrl = await api.getAuthUrl(frob, perms);
+    const callbackUrl = new URL("/oauth/callback", c.req.url);
+    callbackUrl.searchParams.set("frob", frob);
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Connect to Remember The Milk</title>
+          <style>
+            body {
+              font-family: system-ui, sans-serif;
+              background: #f9fafb;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              margin: 0;
+            }
+            .container {
+              background: white;
+              padding: 2rem;
+              border-radius: 8px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              max-width: 400px;
+              text-align: center;
+            }
+            .button {
+              display: inline-block;
+              background: #0073e6;
+              color: white;
+              padding: 0.75rem 2rem;
+              border-radius: 6px;
+              text-decoration: none;
+              margin: 0.5rem;
+            }
+            .button:hover { background: #005bb5; }
+            .secondary { background: #6c757d; }
+            .secondary:hover { background: #5a6268; }
+            .info { color: #666; margin: 1rem 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Connect to Remember The Milk</h1>
+            <p class="info">
+              To use RTM tools in your MCP client, authorize access to your RTM account.
+            </p>
+            <p>
+              <a href="${authUrl}" target="_blank" class="button">
+                Authorize with RTM
+              </a>
+            </p>
+            <p class="info">
+              After authorizing in RTM, click below to complete setup:
+            </p>
+            <p>
+              <a href="${callbackUrl.toString()}" class="button secondary">
+                Complete Setup
+              </a>
+            </p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("OAuth authorize error:", error);
+    return c.text(`Authorization error: ${error.message}`, 500);
   }
-  
-  const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
-  
-  // Get RTM frob (their temporary auth token)
-  const frob = await api.getFrob();
-  
-  // Generate session ID for temporary storage
-  const sessionId = crypto.randomUUID();
-  
-  // Store OAuth session temporarily (10 minutes)
-  // This is NOT a user database - just temporary flow state
-  await c.env.AUTH_STORE.put(
-    `oauth_session:${sessionId}`,
-    JSON.stringify({
-      frob,
-      state,
-      redirect_uri,
-      client_id,
-      created_at: Date.now()
-    }),
-    { expirationTtl: 600 } // 10 minutes
-  );
-  
-  // Store reverse mapping for callback
-  await c.env.AUTH_STORE.put(
-    `frob_session:${frob}`,
-    sessionId,
-    { expirationTtl: 600 }
-  );
-  
-  // Build RTM auth URL
-  const perms = scope === "read" ? "read" : "delete";
-  const authUrl = await api.getAuthUrl(frob, perms);
-  
-  // Build callback URL for after RTM auth
-  const callbackUrl = new URL("/oauth/callback", c.req.url);
-  callbackUrl.searchParams.set("frob", frob);
-  
-  // Show auth page with RTM redirect
-  return c.html(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Connect to Remember The Milk</title>
-        <style>
-          body {
-            font-family: system-ui, sans-serif;
-            background: #f9fafb;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-          }
-          .container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            max-width: 400px;
-            text-align: center;
-          }
-          .button {
-            display: inline-block;
-            background: #0073e6;
-            color: white;
-            padding: 0.75rem 2rem;
-            border-radius: 6px;
-            text-decoration: none;
-            margin: 0.5rem;
-          }
-          .button:hover { background: #005bb5; }
-          .secondary { background: #6c757d; }
-          .secondary:hover { background: #5a6268; }
-          .info { color: #666; margin: 1rem 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>Connect to Remember The Milk</h1>
-          <p class="info">
-            To use RTM tools in your MCP client, authorize access to your RTM account.
-          </p>
-          <p>
-            <a href="${authUrl}" target="_blank" class="button">
-              Authorize with RTM
-            </a>
-          </p>
-          <p class="info">
-            After authorizing in RTM, click below to complete setup:
-          </p>
-          <p>
-            <a href="${callbackUrl.toString()}" class="button secondary">
-              Complete Setup
-            </a>
-          </p>
-        </div>
-      </body>
-    </html>
-  `);
 });
-
 /**
  * RTM Callback Handler
  * Completes the OAuth2 flow after RTM authorization
@@ -475,6 +485,55 @@ app.get("/", (c) => {
       mcp_sse: "/sse"
     }
   });
+});
+
+// OAuth2 Authorization Server Metadata (Discovery)
+app.get("/.well-known/oauth-authorization-server", (c) => {
+  const baseUrl = new URL(c.req.url).origin;
+  
+  return c.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
+    token_endpoint: `${baseUrl}/oauth/token`,
+    registration_endpoint: `${baseUrl}/register`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["none"],
+    code_challenge_methods_supported: ["S256"]
+  });
+});
+
+// Dynamic Client Registration
+app.post("/register", async (c) => {
+  const body = await c.req.json();
+  const { client_name, redirect_uris } = body;
+  
+  if (!client_name || !redirect_uris || !Array.isArray(redirect_uris)) {
+    return c.json({ error: "invalid_client_metadata" }, 400);
+  }
+  
+  // Generate client_id
+  const client_id = crypto.randomUUID();
+  
+  // Store client registration (optional - you can skip this if accepting any client)
+  await c.env.AUTH_STORE.put(
+    `client:${client_id}`,
+    JSON.stringify({
+      client_name,
+      redirect_uris,
+      created_at: Date.now()
+    }),
+    { expirationTtl: 86400 * 30 } // 30 days
+  );
+  
+  return c.json({
+    client_id,
+    client_name,
+    redirect_uris,
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none"
+  }, 201);
 });
 
 export default {
