@@ -209,7 +209,7 @@ app.get("/authorize", async (c) => {
 
   await c.env.AUTH_STORE.put(
     `frob_session:${frob}`,
-    JSON.stringify({ state, redirect_uri, client_id, code_challenge, code_challenge_method }),
+    JSON.stringify({ state, redirect_uri, client_id, code_challenge, code_challenge_method, scope }),
     { expirationTtl: 600 }
   );
 
@@ -257,19 +257,16 @@ app.get("/authorize", async (c) => {
             statusDiv.style.display = 'flex';
             infoPara.textContent = 'Waiting for authorization...';
 
-            // Use a small timeout to allow the UI to update before the popup attempt
             setTimeout(() => {
                 const authWindow = window.open("${authUrl}", 'rtm_auth', 'width=800,height=600,scrollbars=yes');
                 
                 if (!authWindow || authWindow.closed || typeof authWindow.closed === 'undefined') {
-                    // Popup was blocked.
                     statusDiv.style.display = 'none';
                     authButton.style.display = 'inline-block';
                     infoPara.innerHTML = '<strong class="error">Popup blocked!</strong> Please allow popups for this site and click the button again.';
                     return;
                 }
 
-                // Popup opened successfully, start polling.
                 const checkInterval = setInterval(() => {
                 if (authWindow.closed) {
                     clearInterval(checkInterval);
@@ -310,6 +307,7 @@ app.get("/callback", async (c) => {
         user_name: userInfo.auth.user.fullname || userInfo.auth.user.username,
         client_id: session.client_id,
         code_challenge: session.code_challenge,
+        scope: session.scope,
       }),
       { expirationTtl: 600 }
     );
@@ -332,42 +330,67 @@ app.get("/callback", async (c) => {
  * OAuth2 Token Exchange Endpoint
  */
 app.post("/token", async (c) => {
-  const body: any = await c.req.parseBody();
-  const { grant_type, code, client_id, code_verifier } = body;
+  console.log("[/token] endpoint hit. Processing token exchange.");
 
-  if (grant_type !== "authorization_code") {
-    return c.json({ error: "unsupported_grant_type" }, 400);
-  }
-  if (!code || !code_verifier) {
-    return c.json({ error: "invalid_request", error_description: "Missing code or code_verifier" }, 400);
-  }
+  try {
+    const body: any = await c.req.parseBody();
+    const { grant_type, code, client_id, code_verifier } = body;
 
-  const codeMappingJSON = await c.env.AUTH_STORE.get(`oauth_code:${code}`);
-  if (!codeMappingJSON) {
-    return c.json({ error: "invalid_grant" }, 400);
-  }
+    console.log(`[/token] Received body:`, { grant_type, code, client_id, code_verifier: code_verifier ? 'REDACTED' : 'MISSING' });
 
-  const codeMapping = JSON.parse(codeMappingJSON);
-  await c.env.AUTH_STORE.delete(`oauth_code:${code}`);
-
-  if (client_id && codeMapping.client_id !== client_id) {
-    return c.json({ error: "invalid_client" }, 400);
-  }
-
-  const isPkceValid = await verifyPkceChallenge(code_verifier, codeMapping.code_challenge);
-  if (!isPkceValid) {
-    return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
-  }
-
-  return c.json({
-    access_token: codeMapping.auth_token,
-    token_type: "Bearer",
-    scope: "delete",
-    metadata: { 
-      user_name: codeMapping.user_name,
-      client_id: codeMapping.client_id
+    if (grant_type !== "authorization_code") {
+      console.error("[/token] Error: unsupported_grant_type. Received:", grant_type);
+      return c.json({ error: "unsupported_grant_type" }, 400);
     }
-  });
+
+    if (!code || !code_verifier) {
+      console.error("[/token] Error: Missing code or code_verifier.", { hasCode: !!code, hasVerifier: !!code_verifier });
+      return c.json({ error: "invalid_request", error_description: "Missing code or code_verifier" }, 400);
+    }
+
+    const codeMappingJSON = await c.env.AUTH_STORE.get(`oauth_code:${code}`);
+    if (!codeMappingJSON) {
+      console.error(`[/token] Error: Invalid or expired code. No entry found for oauth_code:${code}`);
+      return c.json({ error: "invalid_grant", error_description: "Invalid or expired authorization code" }, 400);
+    }
+    console.log("[/token] Successfully retrieved session data from AUTH_STORE.");
+
+    const codeMapping = JSON.parse(codeMappingJSON);
+    
+    await c.env.AUTH_STORE.delete(`oauth_code:${code}`);
+    console.log(`[/token] Deleted oauth_code:${code} from AUTH_STORE.`);
+
+    if (client_id && codeMapping.client_id !== client_id) {
+      console.error(`[/token] Error: Invalid client_id. Expected ${codeMapping.client_id}, but received ${client_id}.`);
+      return c.json({ error: "invalid_client" }, 400);
+    }
+    console.log("[/token] client_id validation passed.");
+
+    const isPkceValid = await verifyPkceChallenge(code_verifier, codeMapping.code_challenge);
+    if (!isPkceValid) {
+      console.error("[/token] Error: PKCE verification failed. The provided code_verifier did not match the stored code_challenge.");
+      return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
+    }
+    console.log("[/token] PKCE verification successful.");
+
+    const responsePayload = {
+      access_token: codeMapping.auth_token,
+      token_type: "Bearer",
+      expires_in: 31536000, // 1 year in seconds
+      scope: codeMapping.scope,
+      metadata: { 
+        user_name: codeMapping.user_name,
+        client_id: codeMapping.client_id
+      }
+    };
+
+    console.log("[/token] Successfully processed token exchange. Sending success response:", responsePayload);
+    return c.json(responsePayload);
+
+  } catch (error: any) {
+    console.error("[/token] An unexpected error occurred:", error);
+    return c.json({ error: "server_error", error_description: error.message }, 500);
+  }
 });
 
 /**
