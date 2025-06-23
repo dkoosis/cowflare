@@ -140,4 +140,45 @@ export const SetPrioritySchema = TaskIdentifierSchema.extend({
   }).describe("Priority level: N=None, 1=High, 2=Medium, 3=Low")
 });
 
+
 export type SetPriorityArgs = z.infer<typeof SetPrioritySchema>;
+
+/**
+ * Schema for searching tasks
+ */
+export const SearchTasksSchema = z.object({
+  auth_token: z.string()
+    .min(1, "Authentication token is required")
+    .describe("Your Remember The Milk authentication token"),
+  query: z.string()
+    .min(1, "Search query is required")
+    .describe("RTM search query (e.g., 'priority:1 AND status:incomplete')")
+});
+
+export type SearchTasksArgs = z.infer<typeof SearchTasksSchema>;
+
+/**
+ * Schema for updating a task
+ */
+export const UpdateTaskSchema = TaskIdentifierSchema.extend({
+  name: z.string()
+    .optional()
+    .describe("New task name"),
+  due: z.string()
+    .optional()
+    .describe("New due date"),
+  priority: z.enum(['1', '2', '3', 'N'])
+    .optional()
+    .describe("New priority"),
+  tags: z.string()
+    .optional()
+    .describe("New tags (replaces all)"),
+  notes: z.string()
+    .optional()
+    .describe("New notes"),
+  estimate: z.string()
+    .optional()
+    .describe("Time estimate")
+});
+
+export type UpdateTaskArgs = z.infer<typeof UpdateTaskSchema>;

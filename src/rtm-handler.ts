@@ -210,4 +210,21 @@ app.get("/callback", async (c) => {
   }
 });
 
-export { app as RtmHandler };
+// Root endpoint for OAuth discovery
+app.get("/", (c) => {
+  return c.json({
+    name: "Remember The Milk MCP Server",
+    version: "2.0.0",
+    oauth2: {
+      authorizationUrl: "/authorize",
+      tokenUrl: "/token",
+      required: true
+    }
+  });
+});
+
+//export { app as RtmHandler };
+export const RtmHandler = {
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) => 
+    app.fetch(request, env, ctx)
+};
