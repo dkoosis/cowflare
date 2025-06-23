@@ -18,3 +18,11 @@ class_name = "RtmMCP"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RtmMCP"]
+
+[[kv_namespaces]]
+binding = "OAUTH_DATABASE"
+id = "d863eecd0c5c45f89e0406dbd4d71f87"
+
+[[kv_namespaces]]
+binding = "OAUTH_SESSIONS"
+id = "ce0578d4c9184ebaa675932efa919c8f"

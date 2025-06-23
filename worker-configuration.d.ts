@@ -1,7 +1,9 @@
 interface Env {
   // KV Namespaces
   AUTH_STORE: KVNamespace;
-  
+  OAUTH_DATABASE: KVNamespace;
+  OAUTH_SESSIONS: KVNamespace;
+
   // Durable Objects
   MCP_OBJECT: DurableObjectNamespace;
   
