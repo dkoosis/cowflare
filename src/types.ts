@@ -4,13 +4,15 @@
  */
 
 // Environment configuration
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+
 export interface Env {
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
-  SERVER_URL: string;
   AUTH_STORE: KVNamespace;
-  METRICS_STORE?: KVNamespace;
-  LOG_LEVEL?: 'debug' | 'info' | 'warn' | 'error';
+  RTM_MCP: DurableObjectNamespace;
+  // This binding is injected by the OAuthProvider
+  OAUTH_PROVIDER: OAuthHelpers;
 }
 
 // RTM API Types
