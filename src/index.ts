@@ -396,26 +396,38 @@ app.post("/token", async (c) => {
 /**
  * SSE endpoint for MCP connection
  */
+/**
+ * SSE endpoint for MCP connection
+ */
 app.all("/sse", async (c) => {
+  console.log("[/sse] Received request for SSE connection.");
+
   const auth = c.req.header("authorization");
   if (!auth?.startsWith("Bearer ")) {
+    console.error("[/sse] Unauthorized: Missing or invalid 'Authorization' header.");
     return c.text("Unauthorized", 401);
   }
   
   const token = auth.substring(7);
   if (!token || token.length < 20) {
+    console.error("[/sse] Invalid token: Token is missing or too short.");
     return c.text("Invalid token", 401);
   }
   
+  console.log("[/sse] Authorization header found, attempting to validate token with RTM.");
   const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
+  
   try {
     const userInfo = await api.makeRequest('rtm.auth.checkToken', { auth_token: token });
+    console.log(`[/sse] RTM token validated for user: ${userInfo.auth.user.fullname || userInfo.auth.user.username}. Mounting Durable Object.`);
+    
     return RtmMCP.mount("/sse", {
       rtmToken: token,
       userName: userInfo.auth.user.fullname || userInfo.auth.user.username
     })(c.req.raw, c.env, c.executionCtx);
     
   } catch (error) {
+    console.error("[/sse] RTM token validation failed:", error);
     return c.text("Invalid token", 401);
   }
 });
