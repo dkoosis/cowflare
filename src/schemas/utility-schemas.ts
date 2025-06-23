@@ -35,3 +35,51 @@ export const ParseTimeSchema = z.object({
 });
 
 export type ParseTimeArgs = z.infer<typeof ParseTimeSchema>;
+
+/**
+ * Schema for adding a note to a task
+ */
+export const AddTaskNoteSchema = z.object({
+  auth_token: z.string()
+    .min(1, "Authentication token is required")
+    .describe("Your Remember The Milk authentication token"),
+  list_id: z.string()
+    .min(1, "List ID is required")
+    .describe("The ID of the list containing the task"),
+  taskseries_id: z.string()
+    .min(1, "Task series ID is required")
+    .describe("The ID of the task series"),
+  task_id: z.string()
+    .min(1, "Task ID is required")
+    .describe("The ID of the specific task"),
+  note_title: z.string()
+    .optional()
+    .describe("Title for the note (optional)"),
+  note_text: z.string()
+    .min(1, "Note text is required")
+    .describe("The note content")
+});
+
+export type AddTaskNoteArgs = z.infer<typeof AddTaskNoteSchema>;
+
+/**
+ * Schema for getting locations
+ */
+export const GetLocationsSchema = z.object({
+  auth_token: z.string()
+    .min(1, "Authentication token is required")
+    .describe("Your Remember The Milk authentication token")
+});
+
+export type GetLocationsArgs = z.infer<typeof GetLocationsSchema>;
+
+/**
+ * Schema for getting tags
+ */
+export const GetTagsSchema = z.object({
+  auth_token: z.string()
+    .min(1, "Authentication token is required")
+    .describe("Your Remember The Milk authentication token")
+});
+
+export type GetTagsArgs = z.infer<typeof GetTagsSchema>;
