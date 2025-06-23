@@ -7,6 +7,7 @@
 
 Claude.ai's "Add Integration" flow expects standard OAuth2 authentication. Our RTM MCP server currently uses Remember The Milk's custom frob-based authentication flow. To enable seamless integration from Claude.ai, we need an adapter that translates between these two authentication protocols.
 
+
 ## Decision
 
 Implement an OAuth2 adapter layer that:
