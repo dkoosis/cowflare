@@ -2,19 +2,26 @@ import { Hono } from "hono";
 import { RtmApi } from "./rtm-api";
 import type { Env } from "./types";
 import type { Props } from "./rtm-mcp";
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type OAuthProvider from "@cloudflare/workers-oauth-provider";
 
-// This file now exports a function that creates the Hono app.
-// This allows us to pass in the `OAUTH_PROVIDER` from the main index.ts
-export const createRtmHandler = (OAUTH_PROVIDER: OAuthHelpers) => {
+// This interface defines the holder object.
+export interface ProviderHolder {
+  provider?: OAuthProvider<Env>;
+}
+
+// The function now accepts the holder instead of the provider directly.
+export const createRtmHandler = (holder: ProviderHolder) => {
   const app = new Hono<{ Bindings: Env }>();
 
   /**
    * RTM Authorization Endpoint
    */
   app.get("/authorize", async (c) => {
-    // We use the passed-in OAUTH_PROVIDER directly here.
-    const oauthReqInfo = await OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+    // Access the provider through the holder.
+    // The '!' asserts that the provider will exist when this code runs.
+    const provider = holder.provider!;
+
+    const oauthReqInfo = await provider.parseAuthRequest(c.req.raw);
     if (!oauthReqInfo.clientId) {
       return c.text("Invalid request: Missing clientId", 400);
     }
@@ -42,6 +49,9 @@ export const createRtmHandler = (OAUTH_PROVIDER: OAuthHelpers) => {
     if (!frob) {
       return c.text("Missing frob parameter", 400);
     }
+    
+    // Access the provider through the holder.
+    const provider = holder.provider!;
 
     const sessionJSON = await c.env.AUTH_STORE.get(`frob_session:${frob}`);
     if (!sessionJSON) {
@@ -55,8 +65,7 @@ export const createRtmHandler = (OAUTH_PROVIDER: OAuthHelpers) => {
       const authToken = await api.getToken(frob);
       const userInfo = await api.makeRequest('rtm.auth.checkToken', { auth_token: authToken });
 
-      // Use the passed-in OAUTH_PROVIDER to complete the authorization.
-      const { redirectTo } = await OAUTH_PROVIDER.completeAuthorization({
+      const { redirectTo } = await provider.completeAuthorization({
         request: oauthReqInfo,
         props: {
           rtmToken: authToken,

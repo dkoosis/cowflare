@@ -1,21 +1,38 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
-import { createRtmHandler } from "./rtm-handler"; // Import the factory function
+import { createRtmHandler, type ProviderHolder } from "./rtm-handler";
 import { RtmMCP } from "./rtm-mcp";
 import type { Env } from "./types";
 
-/**
- * Main application entry point.
- */
-export default new OAuthProvider<Env>({
-  // Create the RTM handler by passing the provider's helpers to it
-  defaultHandler: (c) => createRtmHandler(c.env.OAUTH_PROVIDER),
+// A holder object is used to break the circular dependency between the
+// RTM handler (which needs provider helpers) and the provider itself.
+const holder: ProviderHolder = {};
 
+// Create the Hono app for the custom RTM routes (/authorize, /callback).
+const rtmAuthApp = createRtmHandler(holder);
+
+// Create the OAuthProvider, which will act as the main router.
+const provider = new OAuthProvider<Env>({
+  // All requests not handled by the provider's specific endpoints below
+  // will be passed to this default handler.
+  defaultHandler: {
+    fetch: rtmAuthApp.fetch.bind(rtmAuthApp),
+  },
+
+  // The provider will route requests to /sse to the RtmMCP Durable Object.
   apiRoute: "/sse",
   apiHandler: RtmMCP.mount("/sse") as any,
 
-  authorizeEndpoint: "/authorize",
+  // The provider will handle the standard OAuth2 token and client registration
+  // endpoints internally. The custom authorization flow is handled by rtmAuthApp.
   tokenEndpoint: "/token",
   clientRegistrationEndpoint: "/register",
 });
+
+// Now that the provider is created, assign it to the holder to complete the link.
+holder.provider = provider;
+
+// The provider itself is the default export. It will correctly route incoming
+// requests to either its internal handlers or the default rtmAuthApp handler.
+export default provider;
 
 export { RtmMCP };
