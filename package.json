@@ -9,17 +9,18 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "^1.1.0",
+    "@cloudflare/workers-oauth-provider": "^0.0.5",
     "@modelcontextprotocol/sdk": "^0.6.0",
     "agents": "latest",
     "hono": "^4.4.7",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.22.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.4.5",
     "@cloudflare/workers-types": "^4.20240614.0",
     "typescript": "^5.4.5",
-    "vitest": "1.6.0",
-    "wrangler": "^3.60.3"
+    "vitest": "1.5.0",
+    "wrangler": "^4.21.0"
   }
 }

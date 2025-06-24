@@ -26,3 +26,7 @@ id = "d863eecd0c5c45f89e0406dbd4d71f87"
 [[kv_namespaces]]
 binding = "OAUTH_SESSIONS"
 id = "ce0578d4c9184ebaa675932efa919c8f"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "acd0e7b16f484692843d3988cfdad0db"

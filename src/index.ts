@@ -12,20 +12,22 @@ const rtmAuthApp = createRtmHandler(holder);
 
 // Create the OAuthProvider, which will act as the main router.
 const provider = new OAuthProvider<Env>({
+  // The provider will route requests to /sse to the RtmMCP Durable Object.
+  apiRoute: "/sse",
+  apiHandler: {
+    fetch: RtmMCP.mount("/sse") as any
+  },
+
   // All requests not handled by the provider's specific endpoints below
   // will be passed to this default handler.
   defaultHandler: {
     fetch: rtmAuthApp.fetch.bind(rtmAuthApp),
   },
-
-  // The provider will route requests to /sse to the RtmMCP Durable Object.
-  apiRoute: "/sse",
-  apiHandler: RtmMCP.mount("/sse") as any,
-
-  // The provider will handle the standard OAuth2 token and client registration
-  // endpoints internally. The custom authorization flow is handled by rtmAuthApp.
+  
+  // OAuth endpoints configuration
+  authorizeEndpoint: "/authorize",
   tokenEndpoint: "/token",
-  clientRegistrationEndpoint: "/register",
+  clientRegistrationEndpoint: "/register"
 });
 
 // Now that the provider is created, assign it to the holder to complete the link.
