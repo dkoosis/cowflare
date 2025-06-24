@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.0.5",
-    "@modelcontextprotocol/sdk": "^0.6.0",
     "agents": "latest",
     "hono": "^4.4.7",
     "zod": "^3.23.8",

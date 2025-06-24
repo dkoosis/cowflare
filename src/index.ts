@@ -1,4 +1,5 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
+import { Hono } from "hono";
 import { createRtmHandler, type ProviderHolder } from "./rtm-handler";
 import { RtmMCP } from "./rtm-mcp";
 import type { Env } from "./types";
@@ -7,22 +8,25 @@ import type { Env } from "./types";
 // RTM handler (which needs provider helpers) and the provider itself.
 const holder: ProviderHolder = {};
 
-// Create the Hono app for the custom RTM routes (/authorize, /callback).
+// Create the Hono app for the custom RTM auth routes.
 const rtmAuthApp = createRtmHandler(holder);
 
-// Create the OAuthProvider, which will act as the main router.
-const provider = new OAuthProvider<Env>({
-  // The provider will route requests to /sse to the RtmMCP Durable Object.
-  apiRoute: "/sse",
-  apiHandler: {
-    fetch: RtmMCP.mount("/sse") as any
-  },
+// Create a Hono app specifically for the MCP/SSE endpoint.
+const sseApp = new Hono<{ Bindings: Env }>();
+// Mount the DO handler to catch all requests to this app. The "/*" is important
+// to ensure sub-paths like /sse/foo are also routed to the DO.
+sseApp.all("/*", RtmMCP.mount("/sse")); 
 
-  // All requests not handled by the provider's specific endpoints below
-  // will be passed to this default handler.
-  defaultHandler: {
-    fetch: rtmAuthApp.fetch.bind(rtmAuthApp),
-  },
+// Create the OAuthProvider.
+const provider = new OAuthProvider<Env>({
+  provider: "rtm", // The name of your custom provider
+  
+  // Route requests for /sse/... to our sseApp.
+  apiRoute: "/sse",
+  apiHandler: sseApp, // Hono instances are valid ExportedHandlers.
+
+  // All other requests will be passed to the auth app.
+  defaultHandler: rtmAuthApp,
   
   // OAuth endpoints configuration
   authorizeEndpoint: "/authorize",
@@ -34,7 +38,7 @@ const provider = new OAuthProvider<Env>({
 holder.provider = provider;
 
 // The provider itself is the default export. It will correctly route incoming
-// requests to either its internal handlers or the default rtmAuthApp handler.
+// requests to either its internal handlers or one of the configured handlers.
 export default provider;
 
 export { RtmMCP };
