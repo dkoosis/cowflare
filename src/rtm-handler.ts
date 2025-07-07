@@ -172,6 +172,64 @@ export function createRtmHandler() {
       return c.json({ error: 'server_error', error_description: 'Failed to initiate authentication' }, 500);
     }
   });
+  // File: src/rtm-handler.ts (add these endpoints to createRtmHandler)
+
+  /**
+   * OAuth2 Token Introspection Endpoint
+   */
+  app.post('/introspect', async (c) => {
+    console.log('[OAuth] /introspect called');
+    
+    const authHeader = c.req.header('Authorization');
+    const body = await c.req.parseBody();
+    const token = (body.token as string) || (authHeader?.replace('Bearer ', ''));
+    
+    if (!token) {
+      return c.json({ active: false }, 200);
+    }
+
+    const tokenData = await c.env.AUTH_STORE.get(`token:${token}`);
+    if (!tokenData) {
+      console.log('[OAuth] Token not found for introspection');
+      return c.json({ active: false }, 200);
+    }
+
+    const data = JSON.parse(tokenData);
+    return c.json({
+      active: true,
+      scope: 'delete',
+      client_id: data.client_id,
+      username: data.userName,
+      token_type: 'Bearer'
+    }, 200);
+  });
+
+  /**
+   * OAuth2 UserInfo Endpoint
+   */
+  app.get('/userinfo', async (c) => {
+    console.log('[OAuth] /userinfo called');
+    
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ error: 'invalid_token' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const tokenData = await c.env.AUTH_STORE.get(`token:${token}`);
+    
+    if (!tokenData) {
+      console.log('[OAuth] Token not found for userinfo');
+      return c.json({ error: 'invalid_token' }, 401);
+    }
+
+    const data = JSON.parse(tokenData);
+    return c.json({
+      sub: data.userId,
+      name: data.userName,
+      preferred_username: data.userName
+    });
+  });
 
   /**
    * Completion Endpoint
@@ -278,6 +336,11 @@ export function createRtmHandler() {
    * OAuth2 Token Exchange Endpoint
    * Standard implementation - no manual steps here
    */
+// File: src/rtm-handler.ts (replace the existing /token endpoint)
+
+  /**
+   * OAuth2 Token Exchange Endpoint
+   */
   app.post('/token', async (c) => {
     console.log('[OAuth] /token called');
     
@@ -312,9 +375,11 @@ export function createRtmHandler() {
         })
       );
 
+      // Include expires_in for Claude.ai
       return c.json({
         access_token: codeData.rtmToken,
         token_type: 'Bearer',
+        expires_in: 31536000, // 1 year in seconds
         scope: 'delete'
       });
     } catch (error) {
@@ -322,7 +387,7 @@ export function createRtmHandler() {
       return c.json({ error: 'server_error' }, 500);
     }
   });
-
+  
   /**
    * OAuth2 Discovery Endpoint
    */
@@ -332,13 +397,15 @@ export function createRtmHandler() {
       issuer: baseUrl,
       authorization_endpoint: `${baseUrl}/authorize`,
       token_endpoint: `${baseUrl}/token`,
+      introspection_endpoint: `${baseUrl}/introspect`,
+      userinfo_endpoint: `${baseUrl}/userinfo`,
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
       code_challenge_methods_supported: ['S256', 'plain'],
       token_endpoint_auth_methods_supported: ['none'],
+      introspection_endpoint_auth_methods_supported: ['none'],
       scopes_supported: ['read', 'delete']
     });
   });
-
   return app;
 }

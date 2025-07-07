@@ -1,3 +1,4 @@
+// File: src/rtm-mcp.ts
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -6,7 +7,6 @@ import * as schemas from "./schemas";
 import { toInputSchema } from "./schemas/index";
 import type { Env } from "./types";
 
-// Types for the MCP Agent props
 export type Props = {
   rtmToken: string;
   userName: string;
@@ -14,9 +14,6 @@ export type Props = {
 
 type State = null;
 
-/**
- * MCP Durable Object - Handles the actual MCP connection.
- */
 export class RtmMCP extends McpAgent<Env, State, Props> {
   server = new McpServer({
     name: "Remember The Milk MCP Server",
@@ -25,10 +22,21 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
 
   private api!: RtmApi;
 
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env);
+  }
+
   async init() {
+    console.log('[RtmMCP] Initializing with props:', { 
+      hasToken: !!this.props?.rtmToken,
+      userName: this.props?.userName 
+    });
+    
     if (!this.props?.rtmToken) {
+      console.error('[RtmMCP] No RTM token provided in props');
       throw new Error('RTM token is required to initialize the agent.');
     }
+    
     this.api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
 
     // Test Connection Tool
@@ -160,5 +168,33 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
         };
       }
     );
+  }
+
+  // Override fetch to handle props initialization before mounting
+  async fetch(request: Request): Promise<Response> {
+    console.log('[RtmMCP] Fetch called:', {
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries())
+    });
+
+    // Extract props from URL params before calling parent fetch
+    const url = new URL(request.url);
+    const propsParam = url.searchParams.get('props');
+    
+    if (propsParam) {
+      try {
+        this.props = JSON.parse(propsParam);
+        console.log('[RtmMCP] Props set from URL:', { 
+          hasToken: !!this.props?.rtmToken,
+          userName: this.props?.userName 
+        });
+      } catch (e) {
+        console.error('[RtmMCP] Failed to parse props:', e);
+      }
+    }
+
+    // Call parent fetch which handles mounting the MCP server
+    return super.fetch(request);
   }
 }
