@@ -335,7 +335,7 @@ export function createDebugDashboard() {
                       <span class="event-time">${formatTime(event.timestamp)}</span>
                       <span class="event-name">${event.event}</span>
                       ${event.endpoint ? `<span class="event-endpoint">${event.endpoint}</span>` : ''}
-                      ${data ? `<div class="event-data">${data}</div>` : ''}
+                      ${data ? `<pre class="event-data">${data}</pre>` : ''}
                     </div>
                   `;
                 }).join('')}
@@ -630,9 +630,11 @@ export function createEnhancedDebugDashboard() {
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #2a2a2a;
-            white-space: pre-wrap;
+            white-space: pre-wrap;      /* Preserve formatting */
             overflow-x: auto;
             margin-left: 10px;
+            max-width: 600px;           /* Prevent too-wide display */
+            word-break: break-word;     /* Break long strings */
           }
           .success {
             color: #4ade80;
