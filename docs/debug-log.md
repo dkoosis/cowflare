@@ -150,3 +150,20 @@ class_name = "RtmMCP"
 1. Authenticate the request
 2. Pass the props correctly
 3. Let McpAgent do the rest
+
+Also TODO
+
+// In your /health endpoint
+app.get('/health', (c) => {
+  return c.json({ 
+    status: 'ok',
+    service: 'rtm-mcp-server',
+    version: '2.4.0',
+    transport: 'streamable-http',
+    mcp_compliant: true,
+    deployed_at: new Date().toISOString(), // Add this
+    has_resource_fix: true // Add this to confirm fix is deployed
+  });
+});
+
+Enhance the health check to be much more useful and detailed
