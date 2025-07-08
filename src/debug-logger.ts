@@ -1,4 +1,8 @@
-// Update this in your src/debug-logger.ts file
+// File: src/debug-logger.ts
+/**
+ * Debug Logger for RTM OAuth Flow
+ * Persists debug information to KV for systematic troubleshooting
+ */
 
 import type { Env } from './types';
 
@@ -248,6 +252,109 @@ export function createDebugDashboard() {
           .new-request {
             background: #d4edda;
           }
+          .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+          }
+          .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 800px;
+            border-radius: 8px;
+          }
+          .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+          }
+          .close:hover,
+          .close:focus {
+            color: black;
+          }
+          #exportText {
+            width: 100%;
+            height: 400px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+          }
+          .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+          }
+          .copy-btn:hover {
+            background: #218838;
+          }
+          .validation-panel {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+          .validation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          }
+          .validation-score {
+            font-size: 2em;
+            font-weight: bold;
+          }
+          .validation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+          }
+          .validation-rule {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+          }
+          .validation-rule.passed {
+            background: #d4edda;
+          }
+          .validation-rule.failed {
+            background: #f8d7da;
+          }
+          .validation-rule.warning {
+            background: #fff3cd;
+          }
+          .validation-icon {
+            font-size: 20px;
+            margin-right: 10px;
+          }
+          .validation-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.9em;
+          }
         </style>
       </head>
       <body>
@@ -259,9 +366,20 @@ export function createDebugDashboard() {
             <button onclick="location.reload()">🔄 Refresh</button>
             <button onclick="expandAll()">📂 Expand All</button>
             <button onclick="collapseAll()">📁 Collapse All</button>
+            <button onclick="validateProtocol()">🔍 Validate Protocol</button>
+            <button onclick="exportLogs()">📤 Export for Debugging</button>
             <span style="float: right; color: #666;">
               Showing ${oauthFlows.length} OAuth flows from last 24h
             </span>
+          </div>
+          
+          <!-- Protocol Validation Panel -->
+          <div id="validationPanel" class="validation-panel">
+            <div class="validation-header">
+              <h2>🔍 Protocol Validation Results</h2>
+              <button onclick="closeValidation()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            <div id="validationContent"></div>
           </div>
           
           ${oauthFlows.length === 0 ? '<div class="oauth-flow"><div class="flow-header">No OAuth flows found in the last 24 hours</div></div>' : ''}
@@ -314,7 +432,223 @@ export function createDebugDashboard() {
           </div>
         </div>
         
+        <!-- Export Modal -->
+        <div id="exportModal" class="modal">
+          <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>📤 Export Logs for Debugging</h2>
+            <p>Copy this text and share it for debugging:</p>
+            <textarea id="exportText" readonly></textarea>
+            <button class="copy-btn" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+          </div>
+        </div>
+        
         <script>
+          // Store flow data for export
+          const flowData = ${JSON.stringify(oauthFlows)};
+          
+          // MCP OAuth Protocol Validator
+          class ProtocolValidator {
+            constructor() {
+              this.rules = [
+                {
+                  id: 'oauth_discovery',
+                  name: 'OAuth Discovery',
+                  description: 'Client must discover authorization server',
+                  required: true,
+                  check: (events) => events.some(e => e.event === 'discovery_request')
+                },
+                {
+                  id: 'oauth_authorize',
+                  name: 'OAuth Authorization',
+                  description: 'User must complete authorization',
+                  required: true,
+                  check: (events) => events.some(e => e.event.includes('complete_auth'))
+                },
+                {
+                  id: 'token_exchange',
+                  name: 'Token Exchange',
+                  description: 'Authorization code must be exchanged for token',
+                  required: true,
+                  check: (events) => events.some(e => e.event === 'token_exchange_success')
+                },
+                {
+                  id: 'post_token_activity',
+                  name: 'Post-Token Activity',
+                  description: 'Client should attempt to use token after exchange',
+                  required: false,
+                  check: (events) => {
+                    const tokenIdx = events.findIndex(e => e.event === 'token_exchange_success');
+                    return tokenIdx !== -1 && tokenIdx < events.length - 1;
+                  }
+                },
+                {
+                  id: 'resource_discovery',
+                  name: 'Protected Resource Discovery',
+                  description: 'Client should fetch /.well-known/oauth-protected-resource',
+                  required: false,
+                  check: (events) => events.some(e => 
+                    e.endpoint === '/.well-known/oauth-protected-resource'
+                  )
+                },
+                {
+                  id: 'mcp_attempt',
+                  name: 'MCP Access Attempt',
+                  description: 'Client should attempt to access /mcp endpoint',
+                  required: false,
+                  check: (events) => events.some(e => e.endpoint === '/mcp')
+                },
+                {
+                  id: 'authenticated_mcp',
+                  name: 'Authenticated MCP Request',
+                  description: 'Client should make authenticated request to MCP',
+                  required: false,
+                  check: (events) => events.some(e => 
+                    e.endpoint === '/mcp' && e.data && e.data.hasAuth === true
+                  )
+                }
+              ];
+            }
+            
+            validate(events) {
+              const results = this.rules.map(rule => ({
+                ...rule,
+                passed: rule.check(events)
+              }));
+              
+              const required = results.filter(r => r.required);
+              const optional = results.filter(r => !r.required);
+              const requiredPassed = required.filter(r => r.passed).length;
+              const optionalPassed = optional.filter(r => r.passed).length;
+              
+              return {
+                results,
+                summary: {
+                  totalScore: Math.round((results.filter(r => r.passed).length / results.length) * 100),
+                  requiredScore: Math.round((requiredPassed / required.length) * 100),
+                  requiredPassed,
+                  requiredTotal: required.length,
+                  optionalPassed,
+                  optionalTotal: optional.length,
+                  status: requiredPassed === required.length ? 'VALID' : 'INVALID'
+                },
+                diagnosis: this.diagnose(events, results)
+              };
+            }
+            
+            diagnose(events, results) {
+              const diagnosis = [];
+              
+              // Check if OAuth completed
+              const tokenExchange = results.find(r => r.id === 'token_exchange');
+              if (!tokenExchange.passed) {
+                diagnosis.push({
+                  severity: 'error',
+                  message: 'OAuth flow did not complete. Check authorization and token exchange steps.'
+                });
+                return diagnosis;
+              }
+              
+              // Check post-token behavior
+              const postToken = results.find(r => r.id === 'post_token_activity');
+              if (!postToken.passed) {
+                diagnosis.push({
+                  severity: 'error',
+                  message: 'No activity after token exchange. Client may have crashed or failed silently.'
+                });
+              }
+              
+              // Check for new endpoints
+              const resourceDiscovery = results.find(r => r.id === 'resource_discovery');
+              const mcpAttempt = results.find(r => r.id === 'mcp_attempt');
+              
+              if (!resourceDiscovery.passed && !mcpAttempt.passed) {
+                diagnosis.push({
+                  severity: 'warning',
+                  message: 'Client did not attempt to discover MCP server. Missing Protected Resource Metadata implementation?'
+                });
+              }
+              
+              if (mcpAttempt.passed && !results.find(r => r.id === 'authenticated_mcp').passed) {
+                diagnosis.push({
+                  severity: 'info',
+                  message: 'MCP endpoint was accessed but not with authentication. Check WWW-Authenticate handling.'
+                });
+              }
+              
+              // Success case
+              if (results.find(r => r.id === 'authenticated_mcp').passed) {
+                diagnosis.push({
+                  severity: 'success',
+                  message: 'Full OAuth to MCP flow completed successfully!'
+                });
+              }
+              
+              return diagnosis;
+            }
+          }
+          
+          function validateProtocol() {
+            if (flowData.length === 0) {
+              alert('No OAuth flows to validate');
+              return;
+            }
+            
+            const validator = new ProtocolValidator();
+            const flow = flowData[0]; // Validate most recent
+            const validation = validator.validate(flow.events);
+            
+            // Build validation UI
+            let html = '<div class="validation-score" style="color: ' + 
+              (validation.summary.status === 'VALID' ? '#28a745' : '#dc3545') + ';">' +
+              validation.summary.status + ' - ' + validation.summary.totalScore + '% Compliant</div>';
+            
+            html += '<p>Required: ' + validation.summary.requiredPassed + '/' + 
+              validation.summary.requiredTotal + ' | Optional: ' + 
+              validation.summary.optionalPassed + '/' + validation.summary.optionalTotal + '</p>';
+            
+            // Rules grid
+            html += '<div class="validation-grid">';
+            validation.results.forEach(rule => {
+              const cssClass = rule.passed ? 'passed' : (rule.required ? 'failed' : 'warning');
+              const icon = rule.passed ? '✅' : (rule.required ? '❌' : '⚠️');
+              
+              html += '<div class="validation-rule ' + cssClass + '">';
+              html += '<span class="validation-icon">' + icon + '</span>';
+              html += '<div>';
+              html += '<strong>' + rule.name + '</strong><br>';
+              html += '<small>' + rule.description + '</small>';
+              html += '</div></div>';
+            });
+            html += '</div>';
+            
+            // Diagnosis
+            if (validation.diagnosis.length > 0) {
+              html += '<div class="validation-details">';
+              html += '<h3>Diagnosis</h3>';
+              validation.diagnosis.forEach(d => {
+                const color = {
+                  error: '#dc3545',
+                  warning: '#ffc107', 
+                  info: '#17a2b8',
+                  success: '#28a745'
+                }[d.severity];
+                html += '<div style="color: ' + color + '; margin: 5px 0;">';
+                html += '<strong>' + d.severity.toUpperCase() + ':</strong> ' + d.message;
+                html += '</div>';
+              });
+              html += '</div>';
+            }
+            
+            // Show panel
+            document.getElementById('validationContent').innerHTML = html;
+            document.getElementById('validationPanel').style.display = 'block';
+          }
+          
+          function closeValidation() {
+            document.getElementById('validationPanel').style.display = 'none';
+          }
+          
           function toggleFlow(index) {
             const el = document.getElementById('flow-' + index);
             el.classList.toggle('expanded');
@@ -330,6 +664,129 @@ export function createDebugDashboard() {
             document.querySelectorAll('.flow-events').forEach(el => {
               el.classList.remove('expanded');
             });
+          }
+          
+          function exportLogs() {
+            // Create export text optimized for debugging
+            let exportText = 'RTM MCP DEBUG LOGS\\n';
+            exportText += '==================\\n\\n';
+            
+            // Add most recent OAuth flow
+            if (flowData.length > 0) {
+              const recentFlow = flowData[0];
+              
+              // Add protocol validation
+              const validator = new ProtocolValidator();
+              const validation = validator.validate(recentFlow.events);
+              
+              exportText += 'PROTOCOL VALIDATION\\n';
+              exportText += '-------------------\\n';
+              exportText += 'Status: ' + validation.summary.status + '\\n';
+              exportText += 'Compliance Score: ' + validation.summary.totalScore + '%\\n';
+              exportText += 'Required Steps: ' + validation.summary.requiredPassed + '/' + validation.summary.requiredTotal + '\\n\\n';
+              
+              validation.results.forEach(result => {
+                const icon = result.passed ? '✅' : (result.required ? '❌' : '⚠️');
+                exportText += icon + ' ' + result.name + ': ' + (result.passed ? 'PASSED' : 'FAILED') + '\\n';
+              });
+              
+              if (validation.diagnosis.length > 0) {
+                exportText += '\\nDiagnosis:\\n';
+                validation.diagnosis.forEach(d => {
+                  exportText += d.severity.toUpperCase() + ': ' + d.message + '\\n';
+                });
+              }
+              
+              exportText += '\\n';
+              
+              exportText += 'MOST RECENT OAUTH FLOW\\n';
+              exportText += 'Session: ' + recentFlow.sessionId.substring(0, 8) + '...\\n';
+              exportText += 'Started: ' + new Date(recentFlow.startTime).toISOString() + '\\n';
+              exportText += 'Duration: ' + Math.round((recentFlow.endTime - recentFlow.startTime) / 1000) + 's\\n\\n';
+              
+              exportText += 'EVENT SEQUENCE:\\n';
+              exportText += '---------------\\n';
+              
+              recentFlow.events.forEach((event, index) => {
+                const time = new Date(event.timestamp).toLocaleTimeString();
+                exportText += (index + 1) + '. [' + time + '] ' + event.event;
+                
+                if (event.endpoint) {
+                  exportText += ' - ' + event.endpoint;
+                }
+                
+                // Add key data points
+                if (event.event === 'token_exchange_success') {
+                  exportText += ' ✓';
+                } else if (event.event.includes('error')) {
+                  exportText += ' ✗ ERROR: ' + (event.data.error || event.error || 'Unknown error');
+                }
+                
+                exportText += '\\n';
+                
+                // Add relevant data for specific events
+                if (event.event === 'discovery_request' || 
+                    event.event === 'token_exchange_success' ||
+                    event.endpoint === '/.well-known/oauth-protected-resource' ||
+                    event.endpoint === '/mcp') {
+                  exportText += '   Data: ' + JSON.stringify(event.data, null, 2).replace(/\\n/g, '\\n   ') + '\\n';
+                }
+              });
+              
+              exportText += '\\nEXPECTED BUT MISSING:\\n';
+              exportText += '----------------------\\n';
+              
+              // Check for missing expected requests
+              const hasProtectedResource = recentFlow.events.some(e => 
+                e.endpoint === '/.well-known/oauth-protected-resource'
+              );
+              const hasMcpWithAuth = recentFlow.events.some(e => 
+                e.endpoint === '/mcp' && e.data.hasAuth
+              );
+              
+              if (!hasProtectedResource) {
+                exportText += '❌ No request to /.well-known/oauth-protected-resource\\n';
+              }
+              if (!hasMcpWithAuth) {
+                exportText += '❌ No authenticated request to /mcp\\n';
+              }
+              
+              if (hasProtectedResource && hasMcpWithAuth) {
+                exportText += '✅ All expected requests found\\n';
+              }
+            } else {
+              exportText += 'NO OAUTH FLOWS FOUND\\n';
+            }
+            
+            // Show in modal
+            document.getElementById('exportText').value = exportText;
+            document.getElementById('exportModal').style.display = 'block';
+          }
+          
+          function closeModal() {
+            document.getElementById('exportModal').style.display = 'none';
+          }
+          
+          function copyToClipboard() {
+            const textArea = document.getElementById('exportText');
+            textArea.select();
+            document.execCommand('copy');
+            
+            // Show feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => {
+              btn.textContent = originalText;
+            }, 2000);
+          }
+          
+          // Close modal when clicking outside
+          window.onclick = function(event) {
+            const modal = document.getElementById('exportModal');
+            if (event.target == modal) {
+              modal.style.display = 'none';
+            }
           }
           
           // Auto-expand the most recent flow
