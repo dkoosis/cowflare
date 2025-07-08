@@ -1,6 +1,7 @@
 // Updated src/index.ts - Properly integrating McpAgent.serve() with authentication
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { getCookie, setCookie } from "hono/cookie";
 import { createRtmHandler } from "./rtm-handler";
 import { RtmMCP } from "./rtm-mcp";
 import { McpAgent } from "agents/mcp";
@@ -22,19 +23,31 @@ const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
 
 // MCP SPEC REQUIREMENT: Protected Resource Metadata
-app.get('/.well-known/oauth-protected-resource', (c) => {
+app.get('/.well-known/oauth-protected-resource', async (c) => {
   const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  
+  // Log this critical discovery request
+  const { DebugLogger } = await import('./debug-logger');
+  const logger = new DebugLogger(c.env);
+  await logger.log('protected_resource_discovery', {
+    endpoint: '/.well-known/oauth-protected-resource',
+    user_agent: c.req.header('User-Agent'),
+    referer: c.req.header('Referer'),
+    authorization: !!c.req.header('Authorization')
+  });
   
   console.log('[Protected Resource Metadata] Request received');
   
-  return c.json({
+  const metadata = {
     resource: `${baseUrl}/mcp`,
     authorization_servers: [baseUrl],
     bearer_methods_supported: ['header'],
     resource_signing_alg_values_supported: ['none'],
     resource_documentation: baseUrl,
     scopes_supported: ['read', 'delete']
-  });
+  };
+  
+  return c.json(metadata);
 });
 
 // Create the MCP handler using McpAgent's built-in serve() method
@@ -120,6 +133,12 @@ app.all('/mcp', async (c) => {
       id: null
     }, 500);
   }
+});
+
+// Debug endpoint with enhanced dashboard
+app.get('/debug', async (c) => {
+  const { createEnhancedDebugDashboard } = await import('./debug-logger');
+  return createEnhancedDebugDashboard()(c);
 });
 
 // Health check endpoint

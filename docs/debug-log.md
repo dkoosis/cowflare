@@ -1,102 +1,152 @@
-Debug Log - RTM MCP Integration
-🚨 CODING ASSISTANT INSTRUCTIONS
-CRITICAL RULES
+# Debug Log - RTM MCP Integration (Updated)
 
-RTFM: NEVER guess at MCP protocol, Cloudflare APIs, or OAuth specs
-Claude.ai is CORRECT: The client implements the protocol correctly
-MCP uses STREAMING HTTP: NOT SSE, NOT WebSockets - JSONRPC over HTTP streaming
+## 🚀 DEPLOYMENT STATUS: McpAgent.serve() Implementation
 
-📊 CURRENT STATE: Connection Closes Immediately
-✅ WORKING (Don't Touch)
+### Expected Test Outcomes
 
-OAuth flow completes perfectly
-/.well-known/oauth-protected-resource returns correct metadata
-/mcp returns proper 401 + WWW-Authenticate header
-CORS headers configured correctly
-Token storage in KV works
+#### 1. ✅ SUCCESS SCENARIO
+If the fix worked, you should see:
+- OAuth completes → Claude.ai gets token
+- Claude.ai requests `/.well-known/oauth-protected-resource` ✓
+- Claude.ai POSTs to `/mcp` with Bearer token ✓
+- **NEW**: Connection stays open (check Network tab - should show "pending")
+- **NEW**: MCP tools appear in Claude.ai interface
+- **NEW**: Tools can be called successfully
 
-❌ BROKEN
+#### 2. ⚠️ PARTIAL SUCCESS SCENARIOS
 
-/mcp endpoint closes connection immediately after auth validation
-Chrome console: MCP error -32000: Connection closed
+**A. Connection Works but No Tools**
+- Symptom: No "Connection closed" error, but tools don't appear
+- Cause: Props not reaching the Durable Object
+- Debug: Check logs for `[RtmMCP] Initializing with props: { hasToken: false }`
 
-🎯 ROOT CAUSE
-Our /mcp endpoint returns a standard HTTP response and closes. MCP requires a persistent streaming HTTP connection for JSONRPC message exchange.
-🔧 REQUIRED FIX
-Find and update the /mcp endpoint implementation:
-typescript// WRONG - Current implementation probably looks like:
-app.get('/mcp', authMiddleware, async (c) => {
-  // Some validation...
-  return c.json({ success: true }); // This closes immediately!
+**B. Authentication Loop**
+- Symptom: Claude keeps asking to re-authenticate
+- Cause: Session management issue with McpAgent
+- Debug: Check for `Mcp-Session-Id` header in responses
+
+#### 3. ❌ FAILURE SCENARIOS
+
+**A. Still Getting "Connection Closed"**
+```
+MCP error -32000: Connection closed
+```
+- Check deployment actually succeeded: `wrangler tail`
+- Verify the binding exists: `MCP_OBJECT` in wrangler.toml
+- Check if Durable Object migration ran
+
+**B. New Error: "Invalid binding"**
+- The Durable Object isn't properly bound
+- Check wrangler.toml has the binding
+- Ensure `export { RtmMCP }` is in index.ts
+
+**C. 500 Internal Server Error**
+- Props passing mechanism failed
+- McpAgent initialization threw an error
+
+### 🔍 Debug Checklist
+
+1. **Chrome DevTools Network Tab**
+   - [ ] POST to `/mcp` returns 200 (not 401)
+   - [ ] Response has `Mcp-Session-Id` header
+   - [ ] Connection shows as "pending" (streaming)
+   - [ ] Look for EventStream or chunked responses
+
+2. **Wrangler Logs** (`wrangler tail`)
+   ```bash
+   wrangler tail --format pretty
+   ```
+   Look for:
+   - `[MCP Auth] Token valid:`
+   - `[RtmMCP] Initializing with props:`
+   - Any error stack traces
+
+3. **Debug Dashboard**
+   - New events should appear after `/mcp` request
+   - Look for WebSocket connection events
+   - Check for initialization success/failure
+
+### 🛠️ Quick Fixes for Common Issues
+
+#### If Props Aren't Reaching DO:
+The execution context props passing might not work. Alternative approach:
+```typescript
+// In index.ts, modify the mcpHandler call
+const id = c.env.MCP_OBJECT.idFromName(`streamable-http:${userId}`);
+const stub = c.env.MCP_OBJECT.get(id);
+
+// Initialize the DO with props directly
+await stub._init({
+  rtmToken: token,
+  userName,
+  userId
 });
 
-// CORRECT - Must implement streaming:
-app.get('/mcp', authMiddleware, async (c) => {
-  const stream = new ReadableStream({
-    async start(controller) {
-      // 1. Send initial JSONRPC response
-      controller.enqueue(JSON.stringify({
-        jsonrpc: "2.0",
-        method: "connection/ready",
-        params: {}
-      }) + '\n');
-      
-      // 2. Set up request body reader for incoming JSONRPC
-      const reader = c.req.body?.getReader();
-      
-      // 3. Handle bidirectional JSONRPC communication
-      // 4. Keep connection alive
-    }
-  });
-  
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Transfer-Encoding': 'chunked'
-    }
-  });
-});
-📝 IMPLEMENTATION STEPS
+// Then delegate to the handler
+return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
+```
 
-Locate current /mcp implementation
+#### If Session Issues:
+McpAgent manages sessions internally. Make sure:
+1. Don't interfere with `Mcp-Session-Id` header
+2. Let McpAgent handle session creation
+3. Check if CORS exposes the header
 
-Check src/index.ts or wherever routes are defined
-Look for the authenticated /mcp endpoint
+#### If Binding Issues:
+```toml
+# wrangler.toml - ensure this exists
+[[durable_objects.bindings]]
+name = "MCP_OBJECT"
+class_name = "RtmMCP"
+```
 
+### 📊 What Success Looks Like
 
-Check if using McpServer from SDK
+1. **Network Tab**: 
+   - `/mcp` request stays open
+   - Chunked transfer encoding
+   - EventStream messages flowing
 
-If yes: Need to connect it to streaming transport
-If no: Need to implement JSONRPC handling
+2. **Claude.ai**:
+   - "Connected to Remember The Milk" indicator
+   - Tools menu shows RTM tools
+   - Can successfully call tools
 
+3. **Logs**:
+   ```
+   [MCP Auth] Token valid: { userName: 'user', userId: '123' }
+   [RtmMCP] Initializing with props: { hasToken: true, userName: 'user' }
+   Connection successful! Connected as: user
+   ```
 
-Key requirements:
+### 🚨 If All Else Fails
 
-Must NOT close connection after auth
-Must handle streaming JSONRPC messages
-Must integrate with existing RtmMCP Durable Object
+1. **Verify Basic Setup**:
+   ```bash
+   # Check deployment
+   wrangler deployments list
+   
+   # Check DO is registered
+   wrangler d1 list  # Should show RtmMCP if using SQL
+   ```
 
+2. **Test Without Auth** (temporary):
+   - Comment out auth checks
+   - Hardcode props
+   - See if transport works
 
+3. **Fall Back to Simpler Pattern**:
+   - Use the exact pattern from Cloudflare docs
+   - Add auth layer by layer
 
-🛠️ DEBUG TOOLS TO USE
+### 📝 Next Actions Based on Results
 
-ProtocolLogger - Will show the exact request/response
-Chrome DevTools - Network tab to see if connection stays open
-Debug Dashboard - Check for new events after connection attempt
+- **If Success** → Test all RTM tools, monitor for stability
+- **If Props Issue** → Implement direct DO initialization
+- **If Session Issue** → Debug McpAgent session handling
+- **If Still Closing** → Check if McpAgent version supports Streamable HTTP
 
-❓ QUESTIONS TO ANSWER FIRST
-
-Where is the current /mcp endpoint defined?
-Is it already using the MCP SDK's server?
-How is it currently handling the authenticated request?
-
-🚫 DON'T WASTE TIME ON
-
-❌ OAuth flow (working perfectly)
-❌ Discovery endpoints (all correct)
-❌ CORS configuration (already fixed)
-❌ Token validation (working)
-❌ Any theory that Claude.ai is wrong
-
-
-Next Action: Find the current /mcp endpoint implementation and show how it's handling authenticated requests. The fix is to convert it from a close-on-response to a streaming connection.
+**Remember**: The `McpAgent` implementation in `paste.txt` shows it handles all the complex streaming internally. Our job is just to:
+1. Authenticate the request
+2. Pass the props correctly
+3. Let McpAgent do the rest
