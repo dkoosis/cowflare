@@ -16,70 +16,21 @@ For a 3-5 year project, we need to navigate this transition wisely.
 
 ## Decision
 
-**Start with SSE, prepare for Streamable HTTP migration**.
+**Use Streamable HTTP exclusively** for Claude.ai integration.
 
-### Implementation Strategy
+### Why This Changed
+- Testing confirmed Claude.ai fully supports Streamable HTTP (January 2025)
+- SSE requires two endpoints; Streamable HTTP uses one
+- Streamable HTTP is the future direction of MCP
+- No benefit to maintaining legacy SSE for our single client
 
-1. **Phase 1 (Now - Q2 2025)**: SSE Only
-   - Endpoint: `/sse` with `/sse/messages`
-   - Matches Claude.ai's current implementation
-   - Ensures maximum compatibility
+### Implementation
+- Single endpoint: `/mcp`
+- No SSE endpoints needed
+- Simpler codebase, fewer failure modes
 
-2. **Phase 2 (Q3 2025)**: Add Streamable HTTP
-   - Add `/mcp` endpoint alongside SSE
-   - Monitor ecosystem adoption
-   - Test with early adopters
-
-3. **Phase 3 (2026)**: Transition Primary Support
-   - Make Streamable HTTP primary
-   - Deprecate SSE endpoints
-   - Maintain SSE for stragglers
-
-## Rationale
-
-1. **Ecosystem Reality**: Claude.ai uses SSE, making it the de facto standard today
-2. **Future-Proof**: Streamable HTTP is clearly superior and will dominate
-3. **Pragmatic Timing**: 6-12 months gives ecosystem time to migrate
-4. **Low Migration Cost**: Adding second transport later is straightforward
-
-## Implementation Notes
-
-### Current SSE Implementation
-```typescript
-// Keep current implementation as-is
-app.get('/sse', async (c) => { /* ... */ });
-app.post('/sse/messages', async (c) => { /* ... */ });
-
-Future Streamable HTTP Addition
-typescript// Add in Phase 2
-app.all('/mcp', async (c) => {
-  const transport = new StreamableHTTPServerTransport(req, res);
-  await server.connect(transport);
-});
-Consequences
-Positive
-
-Immediate Claude.ai compatibility
-Time to learn from early Streamable HTTP adopters
-Clear migration path
-Avoids being too early to new standard
-
-Negative
-
-Temporary technical debt (dual endpoints)
-Will require migration work in ~1 year
-Slightly more complex than single transport
-
-Monitoring Triggers
-Migrate to Phase 2 when ANY of:
-
-Claude.ai switches to Streamable HTTP
-25% of MCP ecosystem adopts Streamable HTTP
-Major MCP client requires it
-Q3 2025 arrives (whichever comes first)
-
-References
-
-MCP Specification 2025-03-26
-Why MCP Deprecated SSE
-Claude Integrations Documentation
+## Consequences
+- ✅ Simpler implementation
+- ✅ Future-proof (already on new standard)
+- ✅ Better performance (bidirectional streaming)
+- ❌ Cannot support older MCP clients (acceptable - Claude.ai only)
