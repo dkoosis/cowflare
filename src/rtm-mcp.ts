@@ -6,16 +6,17 @@ import { RtmApi } from "./rtm-api";
 import * as schemas from "./schemas";
 import { toInputSchema } from "./schemas/index";
 import type { Env } from "./types";
-import { ProtocolLogger } from './protocol-logger';
 
 export type Props = {
   rtmToken: string;
   userName: string;
+  userId: string;
 };
 
 type State = null;
 
 export class RtmMCP extends McpAgent<Env, State, Props> {
+  // McpAgent expects this to be a property, not a method
   server = new McpServer({
     name: "Remember The Milk MCP Server",
     version: "2.4.0",
@@ -27,10 +28,12 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
     super(state, env);
   }
 
+  // This is called by McpAgent when initializing
   async init() {
     console.log('[RtmMCP] Initializing with props:', { 
       hasToken: !!this.props?.rtmToken,
-      userName: this.props?.userName 
+      userName: this.props?.userName,
+      userId: this.props?.userId
     });
     
     if (!this.props?.rtmToken) {
@@ -110,19 +113,17 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
         description: "Mark a task as complete",
         inputSchema: toInputSchema(schemas.CompleteTaskSchema.omit({ auth_token: true, timeline: true }))
       },
-      async ({ list_id, taskseries_id, task_id }) => {
+      async (args) => {
         const timeline = await this.api.createTimeline(this.props.rtmToken);
-        await this.api.makeRequest('rtm.tasks.complete', {
+        const response = await this.api.makeRequest('rtm.tasks.complete', {
           auth_token: this.props.rtmToken,
           timeline,
-          list_id,
-          taskseries_id,
-          task_id
+          ...args
         });
         return {
           content: [{
             type: "text",
-            text: `Task completed successfully`
+            text: `Task completed: ${response.list.taskseries[0].name}`
           }]
         };
       }
@@ -153,13 +154,14 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
     this.server.tool(
       "rtm_search_tasks",
       {
-        description: "Search tasks using RTM query syntax",
+        description: "Search for tasks in RTM",
         inputSchema: toInputSchema(schemas.SearchTasksSchema.omit({ auth_token: true }))
       },
-      async ({ query }) => {
+      async (args) => {
+        const filter = args.filter || args.query || "";
         const response = await this.api.makeRequest('rtm.tasks.getList', {
           auth_token: this.props.rtmToken,
-          filter: query
+          filter
         });
         return {
           content: [{
@@ -171,51 +173,10 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
     );
   }
 
-  // Override fetch to handle props initialization before mounting
-async fetch(request: Request): Promise<Response> {
-    const startTime = Date.now();
-    const url = new URL(request.url);
-
-    const propsParam = url.searchParams.get('props');
-    if (propsParam) {
-        try {
-            this.props = JSON.parse(propsParam);
-        } catch (e) {
-            console.error('[RtmMCP] Failed to parse props:', e);
-        }
-    }
-    
-    const sessionId = this.state.id.toString();
-
-    const requestBody = await request.clone().text();
-    const requestData = {
-        method: request.method,
-        url: request.url,
-        headers: Object.fromEntries(request.headers),
-        body: requestBody,
-    };
-
-    const response = await super.fetch(request);
-
-    const responseClone = response.clone();
-    const responseBody = await responseClone.text();
-
-    const transaction: Omit<McpTransaction, 'sessionId'> = {
-        transactionId: crypto.randomUUID(),
-        timestamp: startTime,
-        durationMs: Date.now() - startTime,
-        request: requestData,
-        response: {
-            statusCode: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers),
-            body: responseBody,
-        },
-    };
-
-    const protocolLogger = new ProtocolLogger(this.env, sessionId);
-    this.state.waitUntil(protocolLogger.logTransaction(transaction));
-
-    return response;
- }
+  // Remove the custom fetch method - McpAgent handles all transport logic
+  // The base McpAgent class will handle:
+  // - WebSocket connections
+  // - Streamable HTTP transport
+  // - Session management
+  // - Message routing
 }
