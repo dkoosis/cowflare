@@ -598,20 +598,21 @@ export function createRtmHandler() {
       base_url: baseUrl
     });
     
-    return c.json({
-      issuer: baseUrl,
-      authorization_endpoint: `${baseUrl}/authorize`,
-      token_endpoint: `${baseUrl}/token`,
-      introspection_endpoint: `${baseUrl}/introspect`,
-      userinfo_endpoint: `${baseUrl}/userinfo`,
-      response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
-      code_challenge_methods_supported: ['S256', 'plain'],
-      token_endpoint_auth_methods_supported: ['none'],
-      introspection_endpoint_auth_methods_supported: ['none'],
-      scopes_supported: ['read', 'delete']
-    });
+return c.json({
+  issuer: baseUrl,
+  authorization_endpoint: `${baseUrl}/authorize`,
+  token_endpoint: `${baseUrl}/token`,
+  introspection_endpoint: `${baseUrl}/introspect`,
+  userinfo_endpoint: `${baseUrl}/userinfo`,
+  registration_endpoint: `${baseUrl}/register`, // ADD THIS LINE
+  response_types_supported: ['code'],
+  grant_types_supported: ['authorization_code'],
+  code_challenge_methods_supported: ['S256', 'plain'],
+  token_endpoint_auth_methods_supported: ['none'],
+  introspection_endpoint_auth_methods_supported: ['none'],
+  scopes_supported: ['read', 'delete']
   });
+});
 
   // Debug endpoints
   app.get('/debug', createDebugDashboard());
