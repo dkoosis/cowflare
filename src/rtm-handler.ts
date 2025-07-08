@@ -468,7 +468,8 @@ export function createRtmHandler() {
         access_token: codeData.rtmToken,
         token_type: 'Bearer',
         expires_in: 31536000, // 1 year
-        scope: 'delete'
+        scope: 'delete',
+        resource: `${baseUrl}/mcp`
       });
     } catch (error) {
       await logger.log('token_exchange_exception', {
