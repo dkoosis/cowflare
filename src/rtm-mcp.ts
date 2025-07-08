@@ -217,4 +217,5 @@ async fetch(request: Request): Promise<Response> {
     this.state.waitUntil(protocolLogger.logTransaction(transaction));
 
     return response;
+ }
 }
