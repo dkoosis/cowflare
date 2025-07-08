@@ -1,8 +1,18 @@
 # RTM MCP OAuth Debug Tracker
 
-## Current State
-- **Symptom**: Claude.ai shows "Connect" button instead of "Connected" after completing OAuth flow
-- **Last Updated**: [Update with each session]
+## The Real Issue (From MCP Spec)
+
+After OAuth completion, Claude.ai needs to discover the MCP server using this flow:
+1. Try to access MCP server endpoint
+2. Get 401 with `WWW-Authenticate` header containing `resource_metadata` URL
+3. Fetch `/.well-known/oauth-protected-resource`
+4. Discover authorization server from metadata
+5. Connect to MCP server with token
+
+**Your implementation is missing**:
+- ❌ `/.well-known/oauth-protected-resource` endpoint
+- ❌ Proper `WWW-Authenticate` header on 401 responses
+- These are REQUIRED by MCP spec
 
 ## Confirmed Working ✅
 
@@ -32,14 +42,15 @@
 
 ## Confirmed Issues ❌
 
-1. **Missing `/register` endpoint**
-   - Advertised in discovery but returns 404
-   - May cause Claude.ai to fail silently
+1. **~~Missing `/register` endpoint~~** ✅ NOT THE ISSUE
+   - Advertised in discovery but NOT called by Claude.ai
+   - No 404 errors observed
 
 2. **No post-token validation calls**
    - No `/introspect` requests observed
    - No `/userinfo` requests observed
-   - Suggests Claude.ai might be failing before these steps
+   - No `/mcp` requests observed
+   - Complete silence after token exchange at 01:30:38.991Z
 
 ## Current Implementation Details
 
@@ -68,27 +79,21 @@ KV Value: {
 
 ## Hypotheses to Test
 
-### High Priority
-1. **H1**: Missing `/register` endpoint causes silent failure
-   - **Test**: Remove from discovery OR implement endpoint
-   - **Status**: Not tested
+### ✅ Confirmed from MCP Spec
+1. **MCP servers MUST implement Protected Resource Metadata (RFC9728)**
+   - **Evidence**: Direct requirement in MCP spec
+   - **Missing**: `/.well-known/oauth-protected-resource` endpoint
+   - **Status**: Not implemented
 
-### Medium Priority
-2. **H2**: MCP server needs Protected Resource Metadata
-   - **Evidence**: MCP spec says servers MUST implement RFC9728
-   - **Test**: Add `/.well-known/oauth-protected-resource`
-   - **Status**: Not tested
+2. **MCP servers MUST return WWW-Authenticate header on 401**
+   - **Evidence**: Required by spec for resource discovery
+   - **Missing**: Header with `resource_metadata` URL
+   - **Status**: Not implemented
 
-3. **H3**: Missing `WWW-Authenticate` header on 401
-   - **Evidence**: MCP spec requires specific header format
-   - **Test**: Update `/mcp` auth middleware
-   - **Status**: Not tested
-
-### Low Priority
-4. **H4**: Client ID validation too strict
-   - **Evidence**: None yet
-   - **Test**: Only after H1-H3
-   - **Status**: Not tested
+### Previous Hypotheses
+3. **H1**: ~~Missing `/register` endpoint causes silent failure~~ ❌ DISPROVEN
+   - **Test**: Watch if called
+   - **Status**: Not called - not the issue
 
 ## Debug Questions for Next Session
 
@@ -99,21 +104,24 @@ When testing fixes, capture:
 4. Any 4xx/5xx errors in the flow?
 5. Does Claude.ai ever attempt to access `/mcp`?
 
-## Next Steps (Prioritized)
+## Next Steps (Based on MCP Spec Requirements)
 
-1. **Fix #1**: Remove `/register` from discovery (simplest fix)
-   ```typescript
-   // Remove line: registration_endpoint: `${baseUrl}/register`,
-   ```
+1. **Apply BOTH fixes** (they're required by spec, not optional):
+   - Add `/.well-known/oauth-protected-resource` endpoint
+   - Update `/mcp` middleware to return WWW-Authenticate header
 
 2. **Deploy and test** with debug logging active
 
-3. **Analyze new logs** focusing on:
-   - Post-token-exchange behavior
-   - Any new error patterns
-   - Whether `/introspect` or `/userinfo` get called
+3. **Watch for new request pattern**:
+   - Token exchange completes
+   - Request to `/mcp` (probably without token first)
+   - 401 with WWW-Authenticate
+   - Request to `/.well-known/oauth-protected-resource`
+   - Request to `/mcp` with Bearer token
 
-4. **Only if #1 doesn't work**: Consider implementing Protected Resource Metadata
+4. **Success indicators**:
+   - Claude.ai shows "Connected" instead of "Connect"
+   - Debug logs show MCP requests with Bearer token
 
 ## Session Log
 
@@ -122,8 +130,14 @@ When testing fixes, capture:
 - Confirmed OAuth flow completes but connection not recognized
 - No `/introspect` or `/userinfo` calls observed
 
-### Session 2 (Current)
-- [Add findings here]
+### Session 2 (Current - Debug Log Analysis + Spec Review)
+- **FINDING**: `/register` is NOT called - not the issue
+- **FINDING**: Complete silence after token exchange (01:30:38.991Z)
+- **FINDING**: No attempts to access `/mcp` or any other endpoint
+- **FINDING**: Read MCP spec - MCP servers MUST implement RFC9728 Protected Resource Metadata
+- **FINDING**: MCP servers MUST return WWW-Authenticate header with resource_metadata URL
+- **CONCLUSION**: Claude.ai can't discover the MCP server because required discovery mechanism is missing
+- **NEXT TEST**: Implement spec-compliant discovery (Protected Resource Metadata + WWW-Authenticate)
 
 ---
 
