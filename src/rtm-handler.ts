@@ -381,6 +381,7 @@ export function createRtmHandler() {
    */
   app.post('/token', async (c) => {
     const logger = c.get('debugLogger');
+    const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
     
     const body = await c.req.parseBody();
     const { grant_type, code, client_id } = body as Record<string, string>;
