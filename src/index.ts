@@ -137,8 +137,8 @@ app.all('/mcp', async (c) => {
 
 // Debug endpoint with enhanced dashboard
 app.get('/debug', async (c) => {
-  const { createEnhancedDebugDashboard } = await import('./debug-logger');
-  return createEnhancedDebugDashboard()(c);
+  const { createDebugDashboard } = await import('./debug-logger');
+  return createDebugDashboard()(c);
 });
 
 // Health check endpoint

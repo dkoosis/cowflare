@@ -1,6 +1,6 @@
 // File: src/debug-logger.ts
 /**
- * Debug Logger for RTM OAuth Flow
+ * Debug Logger for RTM OAuth Flow and MCP Connection
  * Persists debug information to KV for systematic troubleshooting
  */
 
@@ -41,6 +41,49 @@ export class DebugLogger {
     const key = `debug:${Date.now()}_${this.sessionId}_${event}`;
     await this.env.AUTH_STORE.put(key, JSON.stringify(debugEvent), {
       expirationTtl: 86400 // 24 hours
+    });
+  }
+
+  // NEW: Specific MCP connection logging
+  async logMcpConnection(type: 'attempt' | 'upgrade' | 'session' | 'error', data: Record<string, any> = {}, error?: Error) {
+    const mcpEvent = `mcp_connection_${type}`;
+    await this.log(mcpEvent, {
+      ...data,
+      transport_headers: {
+        upgrade: data.headers?.upgrade,
+        connection: data.headers?.connection,
+        'mcp-session-id': data.headers?.['mcp-session-id'],
+        authorization: data.headers?.authorization ? 'Bearer [REDACTED]' : 'none'
+      }
+    }, error);
+  }
+
+  // NEW: Log MCP transport detection (focusing on streamable HTTP)
+  async logMcpTransport(request: Request, transportType: 'streamable-http' | 'unknown') {
+    const url = new URL(request.url);
+    await this.log('mcp_transport_type', {
+      transport: transportType,
+      path: url.pathname,
+      method: request.method,
+      headers: {
+        accept: request.headers.get('accept'),
+        'content-type': request.headers.get('content-type'),
+        upgrade: request.headers.get('upgrade'),
+        'mcp-session-id': request.headers.get('mcp-session-id')
+      }
+    });
+  }
+
+  // NEW: Log Durable Object initialization
+  async logDurableObjectInit(doId: string, props: any) {
+    await this.log('mcp_do_init', {
+      durable_object_id: doId,
+      props: {
+        hasToken: !!props?.rtmToken,
+        hasUserId: !!props?.userId,
+        hasUserName: !!props?.userName,
+        propsKeys: props ? Object.keys(props) : []
+      }
     });
   }
 
@@ -95,7 +138,13 @@ export const withDebugLogging = async (c: any, next: any) => {
     debugSessionId = `auth_${tokenPrefix}`;
   }
   
-  // 4. Generate new session only if none found
+  // 4. Check for MCP-Session-Id header (links MCP sessions)
+  const mcpSessionId = c.req.header('Mcp-Session-Id');
+  if (mcpSessionId && !debugSessionId) {
+    debugSessionId = `mcp_${mcpSessionId}`;
+  }
+  
+  // 5. Generate new session only if none found
   if (!debugSessionId) {
     debugSessionId = crypto.randomUUID();
   }
@@ -111,284 +160,21 @@ export const withDebugLogging = async (c: any, next: any) => {
   
   const logger = new DebugLogger(c.env, debugSessionId);
   
+  // Log MCP transport details for debugging
+  const url = new URL(c.req.url);
+  if (url.pathname.includes('/mcp')) {
+    await logger.logMcpTransport(c.req.raw, 'streamable-http');
+  }
+  
   c.set('debugLogger', logger);
   c.set('debugSessionId', debugSessionId);
   
   await next();
 };
 
-// Create improved debug dashboard
-export function createDebugDashboard() {
-  return async (c: any) => {
-    const { DebugLogger } = await import('./debug-logger');
-    const logs = await DebugLogger.getRecentLogs(c.env, 200);
-    
-    // Group logs by session
-    const sessionGroups = new Map<string, DebugEvent[]>();
-    for (const log of logs) {
-      if (!sessionGroups.has(log.sessionId)) {
-        sessionGroups.set(log.sessionId, []);
-      }
-      sessionGroups.get(log.sessionId)!.push(log);
-    }
-    
-    // Format timestamp
-    const formatTime = (timestamp: number) => {
-      const date = new Date(timestamp);
-      return date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
-      });
-    };
-    
-    // Format relative time
-    const getRelativeTime = (timestamp: number) => {
-      const diff = Date.now() - timestamp;
-      if (diff < 60000) return `${Math.round(diff / 1000)}s ago`;
-      if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
-      if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
-      return `${Math.round(diff / 86400000)}d ago`;
-    };
-    
-    // Find OAuth flows
-    const findOAuthFlows = () => {
-      const flows = [];
-      for (const [sessionId, events] of sessionGroups) {
-        const hasOAuth = events.some(e => 
-          e.event.includes('oauth') || 
-          e.event.includes('authorize') || 
-          e.event.includes('token')
-        );
-        if (hasOAuth) {
-          flows.push({
-            sessionId,
-            events: events.sort((a, b) => a.timestamp - b.timestamp),
-            startTime: Math.min(...events.map(e => e.timestamp)),
-            endTime: Math.max(...events.map(e => e.timestamp))
-          });
-        }
-      }
-      return flows.sort((a, b) => b.startTime - a.startTime);
-    };
-    
-    const oauthFlows = findOAuthFlows();
-    
-    return c.html(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>RTM MCP Debug Dashboard</title>
-        <style>
-          body {
-            font-family: -apple-system, system-ui, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f5f5f5;
-          }
-          .container {
-            max-width: 1400px;
-            margin: 0 auto;
-          }
-          h1 {
-            margin-bottom: 10px;
-          }
-          .subtitle {
-            color: #666;
-            margin-bottom: 20px;
-          }
-          .controls {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          }
-          .controls button {
-            background: #007acc;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
-          }
-          .controls button:hover {
-            background: #005a9e;
-          }
-          .oauth-flow {
-            background: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow: hidden;
-          }
-          .flow-header {
-            background: #f8f9fa;
-            padding: 15px;
-            border-bottom: 1px solid #dee2e6;
-            cursor: pointer;
-          }
-          .flow-header:hover {
-            background: #e9ecef;
-          }
-          .flow-title {
-            font-weight: 600;
-            margin-bottom: 5px;
-          }
-          .flow-meta {
-            font-size: 0.9em;
-            color: #666;
-          }
-          .flow-events {
-            display: none;
-            padding: 0;
-          }
-          .flow-events.expanded {
-            display: block;
-          }
-          .event {
-            border-bottom: 1px solid #eee;
-            padding: 12px 20px;
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 0.9em;
-          }
-          .event:hover {
-            background: #f8f9fa;
-          }
-          .event-time {
-            color: #666;
-            width: 140px;
-            display: inline-block;
-          }
-          .event-name {
-            font-weight: 600;
-            color: #333;
-            margin-right: 10px;
-          }
-          .event-endpoint {
-            color: #007acc;
-          }
-          .event-data {
-            color: #666;
-            margin-top: 5px;
-            margin-left: 150px;
-            font-size: 0.85em;
-          }
-          .highlight {
-            background: #fff3cd;
-          }
-          .error {
-            color: #dc3545;
-          }
-          .success {
-            color: #28a745;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>🔍 RTM MCP Debug Dashboard</h1>
-          <div class="subtitle">Recent OAuth flows and API requests (newest first)</div>
-          
-          <div class="controls">
-            <button onclick="location.reload()">🔄 Refresh</button>
-            <button onclick="expandAll()">📂 Expand All</button>
-            <button onclick="collapseAll()">📁 Collapse All</button>
-            <button onclick="exportLogs()">📤 Export for Debugging</button>
-            <span style="float: right; color: #666;">
-              Showing ${oauthFlows.length} OAuth flows from last 24h
-            </span>
-          </div>
-          
-          ${oauthFlows.length === 0 ? `
-            <div class="oauth-flow">
-              <div class="flow-header">
-                <p>No OAuth flows detected. Waiting for authentication attempts...</p>
-              </div>
-            </div>
-          ` : oauthFlows.map((flow, index) => `
-            <div class="oauth-flow ${index === 0 ? 'highlight' : ''}">
-              <div class="flow-header" onclick="toggleFlow('${flow.sessionId}')">
-                <div class="flow-title">
-                  ${index === 0 ? '🆕 ' : ''}OAuth Flow: ${flow.sessionId.substring(0, 8)}...
-                </div>
-                <div class="flow-meta">
-                  Started: ${formatTime(flow.startTime)} • 
-                  Duration: ${Math.round((flow.endTime - flow.startTime) / 1000)}s •
-                  ${getRelativeTime(flow.startTime)}
-                </div>
-              </div>
-              <div class="flow-events" id="flow-${flow.sessionId}">
-                ${flow.events.map(event => {
-                  const isError = event.error || event.event.includes('error');
-                  const isSuccess = event.event.includes('success');
-                  const data = event.data && Object.keys(event.data).length > 0 
-                    ? JSON.stringify(event.data, null, 2) 
-                    : '';
-                  
-                  return `
-                    <div class="event ${isError ? 'error' : ''} ${isSuccess ? 'success' : ''}">
-                      <span class="event-time">${formatTime(event.timestamp)}</span>
-                      <span class="event-name">${event.event}</span>
-                      ${event.endpoint ? `<span class="event-endpoint">${event.endpoint}</span>` : ''}
-                      ${data ? `<pre class="event-data">${data}</pre>` : ''}
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-        
-        <script>
-          function toggleFlow(sessionId) {
-            const el = document.getElementById('flow-' + sessionId);
-            if (el) {
-              el.classList.toggle('expanded');
-            }
-          }
-          
-          function expandAll() {
-            document.querySelectorAll('.flow-events').forEach(el => {
-              el.classList.add('expanded');
-            });
-          }
-          
-          function collapseAll() {
-            document.querySelectorAll('.flow-events').forEach(el => {
-              el.classList.remove('expanded');
-            });
-          }
-          
-          function exportLogs() {
-            // Export logic here
-            const logs = ${JSON.stringify(oauthFlows)};
-            const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'rtm-mcp-debug-logs.json';
-            a.click();
-          }
-          
-          // Auto-expand the first (most recent) flow
-          const firstFlow = document.querySelector('.flow-events');
-          if (firstFlow) {
-            firstFlow.classList.add('expanded');
-          }
-        </script>
-      </body>
-      </html>
-    `);
-  };
-}
 
-// Enhanced debug dashboard with JSON pretty-printing and protocol logging
-export function createEnhancedDebugDashboard() {
+// Debug dashboard with protocol logging
+export function createDebugDashboard() {
   return async (c: any) => {
     const { DebugLogger } = await import('./debug-logger');
     const { ProtocolLogger } = await import('./protocol-logger');
@@ -415,6 +201,10 @@ export function createEnhancedDebugDashboard() {
         hasToken: boolean;
         hasDiscovery: boolean;
         hasMcpRequest: boolean;
+        hasMcpTransport: boolean;
+        mcpTransportType?: string;
+        hasMcpError: boolean;
+        mcpSessionId?: string;
         protocolLogs: any[];
       }>();
       
@@ -461,6 +251,8 @@ export function createEnhancedDebugDashboard() {
             hasToken: false,
             hasDiscovery: false,
             hasMcpRequest: false,
+            hasMcpTransport: false,
+            hasMcpError: false,
             protocolLogs: []
           };
           flows.set(event.sessionId, flow);
@@ -477,6 +269,18 @@ export function createEnhancedDebugDashboard() {
         if (event.event === 'token_exchange_success') flow.hasToken = true;
         if (event.endpoint === '/.well-known/oauth-protected-resource') flow.hasDiscovery = true;
         if (event.endpoint === '/mcp') flow.hasMcpRequest = true;
+        
+        // Track MCP-specific events
+        if (event.event === 'mcp_transport_type') {
+          flow.hasMcpTransport = true;
+          flow.mcpTransportType = event.data.transport;
+        }
+        if (event.event.startsWith('mcp_') && event.error) {
+          flow.hasMcpError = true;
+        }
+        if (event.data['mcp-session-id']) {
+          flow.mcpSessionId = event.data['mcp-session-id'];
+        }
       });
       
       // Convert to array and sort
@@ -617,6 +421,9 @@ export function createEnhancedDebugDashboard() {
             color: #4a9eff;
             font-weight: 500;
           }
+          .event-name.mcp {
+            color: #8b5cf6;
+          }
           .event-endpoint {
             width: 200px;
             color: #888;
@@ -648,6 +455,10 @@ export function createEnhancedDebugDashboard() {
           .new-request {
             background: #1e3a1e;
             border: 1px solid #22c55e;
+          }
+          .mcp-event {
+            border-left: 3px solid #8b5cf6;
+            padding-left: 12px;
           }
           .protocol-section {
             margin-top: 20px;
@@ -732,6 +543,14 @@ export function createEnhancedDebugDashboard() {
           .protocol-response {
             color: #60a5fa;
           }
+          .mcp-badge {
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+          }
         </style>
       </head>
       <body>
@@ -764,7 +583,8 @@ export function createEnhancedDebugDashboard() {
                 <div class="session-header" onclick="toggleSession('${flow.primarySessionId}')">
                   <div>
                     <span class="status-indicator ${
-                      flow.hasMcpRequest ? 'status-success' : 
+                      flow.hasMcpError ? 'status-error' :
+                      flow.hasMcpRequest && flow.hasMcpTransport ? 'status-success' : 
                       flow.hasToken ? 'status-pending' : 'status-error'
                     }"></span>
                     <strong>${isLatest ? '🆕 Latest Flow' : 'Correlated Flow'}</strong>
@@ -773,6 +593,9 @@ export function createEnhancedDebugDashboard() {
                       `<span style="color: #22c55e; margin-left: 10px;">
                         📎 ${flow.relatedSessions.size} sessions correlated
                       </span>` : ''
+                    }
+                    ${flow.mcpTransportType ? 
+                      `<span class="mcp-badge">${flow.mcpTransportType}</span>` : ''
                     }
                   </div>
                   <div class="session-duration">
@@ -787,12 +610,19 @@ export function createEnhancedDebugDashboard() {
                       const isSuccess = event.event.includes('success');
                       const isNewRequest = event.endpoint === '/.well-known/oauth-protected-resource' || 
                                          event.endpoint === '/mcp';
+                      const isMcpEvent = event.event.startsWith('mcp_');
+                      const isMcpTransport = event.event === 'mcp_transport_type';
                       
                       return `
-                        <div class="event-row ${isNewRequest ? 'new-request' : ''} ${isError ? 'error' : ''} ${isSuccess ? 'success' : ''}">
+                        <div class="event-row ${isNewRequest ? 'new-request' : ''} ${isError ? 'error' : ''} ${isSuccess ? 'success' : ''} ${isMcpEvent ? 'mcp-event' : ''}">
                           <span class="event-time">${formatTime(event.timestamp)}</span>
-                          <span class="event-name">${event.event}</span>
+                          <span class="event-name ${isMcpEvent ? 'mcp' : ''}">${event.event}</span>
                           ${event.endpoint ? `<span class="event-endpoint">${event.endpoint}</span>` : '<span class="event-endpoint">-</span>'}
+                          ${isMcpTransport ? `
+                            <span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">
+                              ${event.data.transport}
+                            </span>
+                          ` : ''}
                           ${event.data && Object.keys(event.data).length > 0 ? `
                             <div class="json-viewer">
                               ${prettyPrintJson(event.data)}
@@ -808,8 +638,15 @@ export function createEnhancedDebugDashboard() {
                       <h4>❌ Missing Expected Steps After Token Exchange</h4>
                       <div class="missing-step">• No request to /.well-known/oauth-protected-resource</div>
                       <div class="missing-step">• No authenticated request to /mcp</div>
+                      ${flow.hasMcpTransport ? 
+                        `<div class="missing-step" style="color: #fbbf24;">⚠️ MCP transport detected but no successful connection</div>` : 
+                        `<div class="missing-step">• No MCP transport initialization detected</div>`
+                      }
                       <div style="margin-top: 10px; color: #888;">
-                        This suggests Claude.ai may not be recognizing this as an MCP server
+                        ${flow.hasMcpError ? 
+                          'MCP connection errors detected - check error logs below' :
+                          'This suggests Claude.ai may not be recognizing this as an MCP server'
+                        }
                       </div>
                     </div>
                   ` : ''}
@@ -861,7 +698,13 @@ export function createEnhancedDebugDashboard() {
               <p>⚠️ Only logs if request reaches RtmMCP Durable Object</p>
             </div>
             <div style="margin: 15px 0;">
-              <h4 style="color: #fbbf24;">3. What We're NOT Seeing</h4>
+              <h4 style="color: #8b5cf6;">3. MCP Transport (Streamable HTTP)</h4>
+              <p>✅ Using McpAgent.serve() for /mcp endpoint</p>
+              <p>📍 Transport type: streamable-http</p>
+              <p>⚠️ Look for mcp_transport_type events in logs</p>
+            </div>
+            <div style="margin: 15px 0;">
+              <h4 style="color: #fbbf24;">4. What We're NOT Seeing</h4>
               <p>❌ No requests to /.well-known/oauth-protected-resource</p>
               <p>❌ No authenticated requests to /mcp</p>
               <p>❓ This means Claude.ai isn't discovering the MCP server after OAuth</p>

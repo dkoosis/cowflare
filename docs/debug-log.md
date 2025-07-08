@@ -151,8 +151,10 @@ class_name = "RtmMCP"
 2. Pass the props correctly
 3. Let McpAgent do the rest
 
-Also TODO
 
+# TODO
+
+## Healthcheck
 // In your /health endpoint
 app.get('/health', (c) => {
   return c.json({ 
@@ -167,3 +169,5 @@ app.get('/health', (c) => {
 });
 
 Enhance the health check to be much more useful and detailed
+
+## Show debug log in local friendly time. 
