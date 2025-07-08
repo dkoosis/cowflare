@@ -6,6 +6,7 @@ import { RtmApi } from "./rtm-api";
 import * as schemas from "./schemas";
 import { toInputSchema } from "./schemas/index";
 import type { Env } from "./types";
+import { ProtocolLogger } from './protocol-logger';
 
 export type Props = {
   rtmToken: string;
@@ -171,30 +172,49 @@ export class RtmMCP extends McpAgent<Env, State, Props> {
   }
 
   // Override fetch to handle props initialization before mounting
-  async fetch(request: Request): Promise<Response> {
-    console.log('[RtmMCP] Fetch called:', {
-      url: request.url,
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries())
-    });
-
-    // Extract props from URL params before calling parent fetch
+async fetch(request: Request): Promise<Response> {
+    const startTime = Date.now();
     const url = new URL(request.url);
-    const propsParam = url.searchParams.get('props');
-    
-    if (propsParam) {
-      try {
-        this.props = JSON.parse(propsParam);
-        console.log('[RtmMCP] Props set from URL:', { 
-          hasToken: !!this.props?.rtmToken,
-          userName: this.props?.userName 
-        });
-      } catch (e) {
-        console.error('[RtmMCP] Failed to parse props:', e);
-      }
-    }
 
-    // Call parent fetch which handles mounting the MCP server
-    return super.fetch(request);
-  }
+    const propsParam = url.searchParams.get('props');
+    if (propsParam) {
+        try {
+            this.props = JSON.parse(propsParam);
+        } catch (e) {
+            console.error('[RtmMCP] Failed to parse props:', e);
+        }
+    }
+    
+    const sessionId = this.state.id.toString();
+
+    const requestBody = await request.clone().text();
+    const requestData = {
+        method: request.method,
+        url: request.url,
+        headers: Object.fromEntries(request.headers),
+        body: requestBody,
+    };
+
+    const response = await super.fetch(request);
+
+    const responseClone = response.clone();
+    const responseBody = await responseClone.text();
+
+    const transaction: Omit<McpTransaction, 'sessionId'> = {
+        transactionId: crypto.randomUUID(),
+        timestamp: startTime,
+        durationMs: Date.now() - startTime,
+        request: requestData,
+        response: {
+            statusCode: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers),
+            body: responseBody,
+        },
+    };
+
+    const protocolLogger = new ProtocolLogger(this.env, sessionId);
+    this.state.waitUntil(protocolLogger.logTransaction(transaction));
+
+    return response;
 }

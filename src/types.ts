@@ -198,7 +198,6 @@ export class ValidationError extends Error {
     this.name = 'ValidationError';
   }
 }
-
 export class AuthenticationError extends Error {
   constructor(
     message: string,
@@ -207,4 +206,25 @@ export class AuthenticationError extends Error {
     super(message);
     this.name = 'AuthenticationError';
   }
+}
+// Add these interfaces to src/types.ts
+
+export interface HttpData {
+  headers: Record<string, string>;
+  body?: string;
+}
+
+export interface McpTransaction {
+  transactionId: string;
+  sessionId: string;
+  timestamp: number;
+  durationMs: number;
+  request: {
+    method: string;
+    url: string;
+  } & HttpData;
+  response: {
+    statusCode: number;
+    statusText: string;
+  } & HttpData;
 }
