@@ -1,4 +1,5 @@
-// File: src/index.ts
+// Updated src/index.ts with MCP spec-compliant implementation
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createRtmHandler } from "./rtm-handler";
@@ -19,10 +20,35 @@ app.use('/*', cors({
 const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
 
+// ===== MCP SPEC REQUIREMENT: Protected Resource Metadata =====
+// This endpoint MUST be implemented according to RFC9728
+app.get('/.well-known/oauth-protected-resource', (c) => {
+  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  
+  console.log('[Protected Resource Metadata] Request received');
+  
+  return c.json({
+    // The canonical URI of the MCP server resource
+    resource: `${baseUrl}/mcp`,
+    
+    // Authorization servers that can issue tokens for this resource
+    authorization_servers: [baseUrl],
+    
+    // Additional metadata (optional but good practice)
+    bearer_methods_supported: ['header'],
+    resource_signing_alg_values_supported: ['none'],
+    resource_documentation: baseUrl,
+    
+    // Optional: scopes supported by this resource
+    scopes_supported: ['read', 'delete']
+  });
+});
+
 // Create MCP app for Streamable HTTP endpoint
 const mcpApp = new Hono<{ Bindings: Env }>();
 
-// Add bearer token authentication middleware
+// ===== MCP SPEC REQUIREMENT: Bearer Token Authentication with WWW-Authenticate =====
+// This middleware MUST return proper WWW-Authenticate headers according to RFC9728
 mcpApp.use('/*', async (c, next) => {
   console.log('[MCP Auth] Request:', {
     method: c.req.method,
@@ -31,26 +57,57 @@ mcpApp.use('/*', async (c, next) => {
   });
 
   const authHeader = c.req.header('Authorization');
+  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  
+  // Check for missing or invalid authorization header
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     console.log('[MCP Auth] Missing or invalid auth header');
-    return c.text('Unauthorized', 401);
+    
+    // MCP SPEC: MUST return WWW-Authenticate header with resource_metadata
+    c.header('WWW-Authenticate', 
+      `Bearer realm="${baseUrl}/mcp", ` +
+      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`
+    );
+    
+    // Return 401 with proper error response body
+    return c.json({ 
+      error: 'unauthorized',
+      error_description: 'Bearer token required' 
+    }, 401);
   }
 
+  // Extract and validate token
   const token = authHeader.substring(7);
   const tokenData = await c.env.AUTH_STORE.get(`token:${token}`);
   
   if (!tokenData) {
     console.log('[MCP Auth] Token not found in store');
-    return c.text('Invalid token', 401);
+    
+    // MCP SPEC: MUST return WWW-Authenticate with error details for invalid tokens
+    c.header('WWW-Authenticate', 
+      `Bearer realm="${baseUrl}/mcp", ` +
+      `error="invalid_token", ` +
+      `error_description="The access token is invalid", ` +
+      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`
+    );
+    
+    // Return 401 with error details
+    return c.json({ 
+      error: 'invalid_token',
+      error_description: 'The access token is invalid' 
+    }, 401);
   }
 
+  // Token is valid - parse user data
   const { userName, userId } = JSON.parse(tokenData);
   console.log('[MCP Auth] Token valid:', { userName, userId });
   
+  // Set context for downstream handlers
   c.set('rtmToken', token);
   c.set('userName', userName);
   c.set('userId', userId);
   
+  // Continue to MCP handler
   await next();
 });
 
@@ -90,7 +147,8 @@ app.get('/health', (c) => {
     status: 'ok',
     service: 'rtm-mcp-server',
     version: '2.4.0',
-    transport: 'streamable-http'
+    transport: 'streamable-http',
+    mcp_compliant: true  // Now we're spec-compliant!
   });
 });
 
@@ -117,6 +175,14 @@ app.get('/', (c) => {
             border-radius: 3px;
             font-family: 'SF Mono', Monaco, 'Courier New', monospace;
           }
+          .new-badge {
+            background: #28a745;
+            color: white;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            vertical-align: super;
+          }
         </style>
       </head>
       <body>
@@ -136,7 +202,16 @@ app.get('/', (c) => {
         <ul>
           <li><code>GET /authorize</code> - OAuth2 authorization</li>
           <li><code>POST /token</code> - OAuth2 token exchange</li>
-          <li><code>* /mcp</code> - MCP Streamable HTTP endpoint</li>
+          <li><code>GET /.well-known/oauth-protected-resource</code> <span class="new-badge">NEW</span> - MCP resource metadata</li>
+          <li><code>* /mcp</code> - MCP Streamable HTTP endpoint (with proper WWW-Authenticate)</li>
+        </ul>
+        
+        <h2>MCP Spec Compliance</h2>
+        <p>This server now implements:</p>
+        <ul>
+          <li>✅ OAuth 2.0 Protected Resource Metadata (RFC9728)</li>
+          <li>✅ WWW-Authenticate headers on 401 responses</li>
+          <li>✅ Proper bearer token validation</li>
         </ul>
       </body>
     </html>
