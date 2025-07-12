@@ -1,82 +1,4 @@
 .
-├── backup
-│   ├── mcp-server-bearer-auth
-│   │   ├── biome.json
-│   │   ├── img
-│   │   │   ├── available-tools.png
-│   │   │   ├── claude-does-math-the-fancy-way.png
-│   │   │   ├── mcp-inspector-oauth-success.png
-│   │   │   ├── mcp-inspector-sse-config.png
-│   │   │   ├── mcp-inspector-successful-tool-call.png
-│   │   │   └── mcp-login.png
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   ├── index.ts
-│   │   │   └── utils.ts
-│   │   ├── static
-│   │   │   ├── img -> ../img
-│   │   │   └── README.md
-│   │   ├── tsconfig.json
-│   │   ├── worker-configuration.d.ts
-│   │   └── wrangler.jsonc
-│   ├── remote-mcp-authless
-│   │   ├── biome.json
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   └── index.ts
-│   │   ├── tsconfig.json
-│   │   ├── worker-configuration.d.ts
-│   │   └── wrangler.jsonc
-│   ├── remote-mcp-github-oauth
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   ├── github-handler.ts
-│   │   │   ├── index.ts
-│   │   │   ├── utils.ts
-│   │   │   └── workers-oauth-utils.ts
-│   │   ├── tsconfig.json
-│   │   ├── worker-configuration.d.ts
-│   │   └── wrangler.jsonc
-│   ├── remote-mcp-google-oauth
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   ├── google-handler.ts
-│   │   │   ├── index.ts
-│   │   │   ├── utils.ts
-│   │   │   └── workers-oauth-utils.ts
-│   │   ├── tsconfig.json
-│   │   ├── worker-configuration.d.ts
-│   │   └── wrangler.jsonc
-│   ├── remote-mcp-server
-│   │   ├── biome.json
-│   │   ├── img
-│   │   │   ├── available-tools.png
-│   │   │   ├── claude-does-math-the-fancy-way.png
-│   │   │   ├── mcp-inspector-oauth-success.png
-│   │   │   ├── mcp-inspector-sse-config.png
-│   │   │   ├── mcp-inspector-successful-tool-call.png
-│   │   │   └── mcp-login.png
-│   │   ├── package.json
-│   │   ├── README.md
-│   │   ├── src
-│   │   │   ├── app.ts
-│   │   │   ├── index.ts
-│   │   │   └── utils.ts
-│   │   ├── static
-│   │   │   ├── img -> ../img
-│   │   │   └── README.md
-│   │   ├── tsconfig.json
-│   │   ├── worker-configuration.d.ts
-│   │   └── wrangler.jsonc
-│   └── src_backup
-│       ├── auth.ts
-│       ├── index.ts
-│       ├── validation.js
-│       └── validation.ts
 ├── claude_cleaned.json
 ├── docs
 │   ├── _index.md
@@ -128,4 +50,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-24 directories, 105 files
+6 directories, 45 files
