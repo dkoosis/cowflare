@@ -1,5 +1,335 @@
 # Debug Log - RTM MCP Integration (Updated)
 
+## 🎯 Context for Future Claude/Developer
+
+**Problem**: After OAuth authentication, Claude.ai redirects to `/new` instead of reconnecting to our MCP server.
+
+**Approach**: We're following systematic hypothesis elimination (not random attempts). Each theory must be tested in isolation with evidence before moving to the next.
+
+**Key Rule**: Always check "Quick Start" first, then follow the decision tree. Never skip ahead or combine fixes.
+
+## 🚀 Quick Start: What To Do Next
+
+```
+Current Status: Haven't tested with MCP Inspector yet
+Next Action: Run baseline test (Phase 1, Step 1.1)
+```
+
+## 📊 Current State Summary (Last Updated: 2025-01-12)
+
+### What Works ✅
+1. OAuth flow completes successfully
+2. Tokens are issued and stored correctly  
+3. User authentication works (userId: 430794)
+4. Discovery endpoints respond correctly
+
+### What Doesn't Work ❌
+1. Claude.ai doesn't attempt to connect to `/mcp` after OAuth
+2. No requests to `/.well-known/oauth-protected-resource` after auth
+3. Claude redirects to `/new` instead of reconnecting
+
+### What We've Already Tried
+1. **McpAgent props** - Execution context now properly passes auth data
+2. **RFC compliance** - oauth-protected-resource returns correct format
+3. **Debug logging** - Enhanced /mcp tracing ready to capture attempts
+4. **Debug dashboard** - Fixed rendering error
+
+## 🎯 Systematic Debugging Plan
+
+### Phase 1: Baseline Testing (MUST DO FIRST)
+**Goal**: Establish if MCP server works independently of Claude.ai
+
+```bash
+# 1.1 Test with MCP Inspector
+npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/mcp
+
+# 1.2 Check health endpoint
+curl https://rtm-mcp-server.vcto-6e7.workers.dev/health
+
+# 1.3 Monitor logs during testing
+wrangler tail --format pretty
+```
+
+**Document Results**:
+- [ ] Inspector connects successfully?
+- [ ] If yes → Server works, Claude-specific issue
+- [ ] If no → Debug server first before Claude integration
+
+### Phase 2: Enhanced Logging Deployment
+**Goal**: Understand exactly what Claude.ai sends during OAuth
+
+1. Add enhanced logging to capture:
+   ```typescript
+   // In /authorize endpoint
+   await logger.log('oauth_authorize_params_detailed', {
+     all_params: c.req.query(),
+     has_resource: !!resource,
+     resource_value: resource,
+     expected_resource: `https://${c.req.header('host')}/mcp`,
+   });
+   ```
+
+2. Deploy: `wrangler deploy`
+3. Trigger new OAuth flow from Claude.ai
+4. Check debug dashboard for `oauth_authorize_params_detailed` events
+
+### Phase 3: Incremental Resource Implementation
+
+#### 3.1 If Claude DOES send resource parameter:
+- [ ] Store resource in session cookie
+- [ ] Include in auth code data  
+- [ ] Return in token response
+- [ ] Test with Inspector after each change
+
+#### 3.2 If Claude DOESN'T send resource parameter:
+- [ ] Check working MCP OAuth examples
+- [ ] Test token format variations
+- [ ] Review discovery endpoint responses
+
+### Phase 4: Test Each Change in Isolation
+
+After EACH code change:
+1. [ ] Deploy
+2. [ ] Test with Inspector (baseline)
+3. [ ] Test with Claude.ai
+4. [ ] Document what changed in this file
+
+## 📊 Test Results Log
+
+### Test Session: [DATE]
+- **Change Made**: 
+- **Inspector Result**: 
+- **Claude.ai Result**: 
+- **New Logs Observed**: 
+- **Next Step**: 
+
+## 🔬 Hypothesis Testing & Elimination Tracker
+
+### Decision Tree
+```
+1. Does MCP server work with Inspector?
+   ├─ NO → Fix server issues first (skip to Server Debugging)
+   └─ YES → Continue to Claude.ai specific issues
+      │
+      2. Does Claude send resource parameter?
+         ├─ YES → Test Hypothesis 1 (Resource handling)
+         └─ NO → Test Hypothesis 4 (Alternative signals)
+            │
+            3. Does token response need specific format?
+               ├─ YES → Test Hypothesis 2 (Token format)
+               └─ NO → Test Hypothesis 3 (Discovery fields)
+```
+
+### Hypothesis Tracking
+
+**Status Legend:**
+- 🔵 Not Tested - Haven't tried yet
+- 🟡 In Progress - Currently testing
+- 🔴 Blocked - Waiting on prerequisite
+- ✅ Confirmed - Theory was correct
+- ❌ Eliminated - Theory was wrong
+
+#### ❓ Hypothesis 1: Missing Resource Parameter
+- **Status**: 🔵 Not Tested
+- **Evidence For**: RFC 8707 requires it; other OAuth MCP servers use it
+- **Evidence Against**: None yet
+- **Specific Test**: 
+  1. Log if Claude sends `resource` in `/authorize`
+  2. If yes, implement storage and return in token
+  3. Check if Claude then attempts `/mcp`
+- **Result**: _[To be filled]_
+- **Conclusion**: _[Eliminated/Confirmed/Partial]_
+
+#### ❓ Hypothesis 2: Token Format Issue  
+- **Status**: 🔵 Not Tested
+- **Prerequisite**: Only test if H1 is eliminated
+- **Evidence For**: Claude might expect JWT or specific claims
+- **Evidence Against**: None yet
+- **Specific Test**:
+  1. Compare our token response with working MCP OAuth servers
+  2. Try adding `aud`, `sub`, `exp` claims
+  3. Test with Inspector first, then Claude
+- **Result**: _[To be filled]_
+- **Conclusion**: _[Eliminated/Confirmed/Partial]_
+
+#### ❓ Hypothesis 3: Discovery Response Missing Fields
+- **Status**: 🔵 Not Tested  
+- **Prerequisite**: Only test if H1 & H2 eliminated
+- **Evidence For**: Claude requests discovery but doesn't proceed
+- **Evidence Against**: Discovery endpoints return valid responses
+- **Specific Test**:
+  1. Add `scopes_supported`, `jwks_uri` to AS metadata
+  2. Add more fields to oauth-protected-resource
+  3. Compare with working implementations
+- **Result**: _[To be filled]_
+- **Conclusion**: _[Eliminated/Confirmed/Partial]_
+
+#### ❓ Hypothesis 4: Claude Needs Alternative Connection Signal
+- **Status**: 🔵 Not Tested
+- **Prerequisite**: Test if Claude doesn't send resource param
+- **Evidence For**: Claude might use different mechanism
+- **Evidence Against**: None yet
+- **Specific Test**:
+  1. Check if Claude expects a redirect after token exchange
+  2. Test if specific headers trigger reconnection
+  3. Analyze working MCP OAuth implementations
+- **Result**: _[To be filled]_
+- **Conclusion**: _[Eliminated/Confirmed/Partial]_
+
+### ❌ Eliminated Theories (Don't Repeat These)
+
+#### Theory Elimination Criteria:
+- **Eliminated**: Tested exactly as specified, failed with clear evidence
+- **Partial**: Some aspects tested but not complete implementation  
+- **Invalid**: Theory was based on incorrect assumption
+
+#### ~~Theory: Props not reaching Durable Object~~
+- **Tested**: 2025-01-11
+- **Evidence**: Logs show props properly initialized
+- **Conclusion**: ELIMINATED - Props work correctly
+
+#### ~~Theory: OAuth flow is broken~~
+- **Tested**: 2025-01-10
+- **Evidence**: Token exchange completes, user authenticated
+- **Conclusion**: ELIMINATED - OAuth works correctly
+
+### 🧪 Test Execution Log
+
+| Date | Hypothesis | Specific Test | Result | Conclusion |
+|------|------------|---------------|---------|------------|
+| 2025-01-12 | Baseline | MCP Inspector test | _pending_ | _pending_ |
+| | | | | |
+
+## 🛡️ Testing Rules (Prevent Wasted Effort)
+
+### Before Testing ANY Hypothesis:
+1. ✅ **Always run baseline test first** (MCP Inspector)
+2. ✅ **One change at a time** - Never combine multiple fixes
+3. ✅ **Test with Inspector before Claude** - Isolate server vs integration issues
+4. ✅ **Document exact change made** - Git commit after each test
+
+### Testing Procedure Template:
+```markdown
+**Hypothesis**: [Which one from above]
+**Date/Time**: [When tested]
+**Exact Change**: [Code diff or description]
+**Inspector Result**: [Pass/Fail with details]
+**Claude Result**: [Connected/No connection with details]  
+**New Log Entries**: [Any new debug info observed]
+**Conclusion**: [Eliminated/Confirmed/Partial - with reasoning]
+```
+
+### Red Flags to Avoid:
+- 🚫 Testing hypothesis 2 before eliminating hypothesis 1
+- 🚫 Making multiple changes then testing
+- 🚫 Assuming Inspector results apply to Claude
+- 🚫 Not documenting negative results
+- 🚫 Retesting eliminated theories with "just one more tweak"
+
+## ⚡ Combination Tracker (Prevent "Kitchen Sink" Debugging)
+
+### Tested Combinations That Failed:
+- [ ] (None yet - fill as we go)
+
+### Example format:
+```
+❌ Resource param + Modified token format + Extra discovery fields
+   Date: 2025-01-XX
+   Result: Still no connection
+   Lesson: These aren't interdependent
+```
+
+## 🔍 External Dependencies & Assumptions
+
+### Critical Assumptions We're Making:
+1. **Claude.ai hasn't changed its MCP integration** 
+   - Last verified: Never
+   - How to verify: Find other working Claude.ai MCP OAuth servers
+
+2. **MCP Inspector accurately represents Claude's behavior**
+   - Last verified: Never  
+   - How to verify: Test a known-working MCP server with both
+
+3. **Our development environment matches production**
+   - Last verified: Using wrangler dev --remote
+   - How to verify: Always test on deployed version
+
+### External Factors to Check:
+- [ ] Claude.ai MCP feature is still in beta/enabled for our account
+- [ ] No Cloudflare Worker outages or changes
+- [ ] RTM API still accepts our authentication method
+
+## 🛑 When to Stop and Reassess
+
+### Stop Conditions:
+1. **All hypotheses eliminated** → Need new theories
+2. **External dependency confirmed broken** → Wait for fix or find workaround
+3. **3+ sessions with no progress** → Seek help from community
+
+### Escalation Path:
+1. Post minimal reproduction case to MCP GitHub discussions
+2. Check if other Claude.ai OAuth MCP servers are working
+3. Consider non-OAuth alternative (if RTM supports it)
+4. Build proof-of-concept with different architecture
+
+### Signs We're on Wrong Track:
+- Inspector works perfectly but Claude never attempts connection
+- Other OAuth MCP servers also fail with Claude
+- Debug logs show no meaningful differences between attempts
+
+## 🚫 Don't Repeat These (Already Fixed)
+- Props fix (done)
+- RFC compliance (done)
+- Basic OAuth flow (works)
+
+## 📋 Known Issues to Fix After MCP Works
+
+### Code Architecture Refactoring
+**⚠️ PREREQUISITE**: Complete MCP streaming debug first. Do not refactor during active debugging.
+
+### P0: Critical - God Module Decomposition
+- `src/index.ts` violates Single Responsibility Principle
+- Split into: router.ts, mcp/handler.ts, rtm/service.ts, auth/middleware.ts
+
+### P1: High - Fix Change Preventers
+- Consolidate RTM API calls
+- Move business logic to service layer
+
+### P2: Medium - Type Safety & Organization
+- Create domain boundaries
+- Add branded types for IDs
+- Replace long switch with command pattern
+
+## 🔗 Resources
+- Debug Dashboard: https://rtm-mcp-server.vcto-6e7.workers.dev/debug
+- MCP Inspector: https://github.com/modelcontextprotocol/inspector
+- Health Check: https://rtm-mcp-server.vcto-6e7.workers.dev/health
+
+## 📋 Session Checklist
+
+### Start of Session:
+- [ ] Check "Quick Start" section for next action
+- [ ] Review eliminated theories (don't retest!)
+- [ ] Note any external changes since last session
+- [ ] Pull latest code: `git pull`
+
+### During Testing:
+- [ ] Follow decision tree strictly
+- [ ] One change per test
+- [ ] Test with Inspector first
+- [ ] Document in test execution log
+- [ ] Commit after each test result
+
+### End of Session:
+- [ ] Update "Quick Start" next action
+- [ ] Update hypothesis status (🔵/🟡/🔴/✅/❌)
+- [ ] Add any failed combinations
+- [ ] Commit TODO.md: `git add docs/TODO.md && git commit -m "Debug session: [summary]"`
+- [ ] Consider if hitting stop conditions
+
+###
+# Debug Log - RTM MCP Integration (Updated)
+
 # TODO
 # TODO - Next Work Session
 
