@@ -25,7 +25,31 @@ app.use('*', cors({
 const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
 
-// OAuth Authorization Server metadata - required by Claude.ai
+/**
+ * Claude makes two RFC-compliant requests during MCP OAuth discovery:
+ * 1. GET /.well-known/oauth-protected-resource (RFC 9728)
+ * 2. GET /.well-known/oauth-authorization-server (RFC 8414)
+ */
+
+// OAuth well-known endpoint - RFC 9728 compliant
+app.get('/.well-known/oauth-protected-resource', (c) => {
+  const logger = c.get('debugLogger');
+  logger.log('well_known_request', {
+    endpoint: '/.well-known/oauth-protected-resource',
+    host: c.req.header('host'),
+    origin: c.req.header('origin')
+  });
+
+  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  
+  // RFC 9728 requires authorization_servers array
+  return c.json({
+    authorization_servers: [`${baseUrl}`],
+    resource: `${baseUrl}/mcp`
+  });
+});
+
+// OAuth Authorization Server metadata - RFC 8414 compliant (already correct)
 app.get('/.well-known/oauth-authorization-server', (c) => {
   const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
   
@@ -64,21 +88,6 @@ app.post('/register', (c) => {
   });
 });
 
-// OAuth well-known endpoint - required by Claude.ai
-app.get('/.well-known/oauth-protected-resource', (c) => {
-  const logger = c.get('debugLogger');
-  logger.log('well_known_request', {
-    endpoint: '/.well-known/oauth-protected-resource',
-    host: c.req.header('host'),
-    origin: c.req.header('origin')
-  });
-
-  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
-  return c.json({
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`
-  });
-});
 
 // MCP endpoint handler
 app.all('/mcp', async (c) => {

@@ -1,5 +1,35 @@
 # Debug Log - RTM MCP Integration (Updated)
 
+# TODO
+
+## 🔴 CORE ISSUE: Claude.ai Doesn't Reconnect After OAuth
+
+**Observation**: After successful OAuth authentication with RTM, Claude.ai redirects to `/new` instead of reconnecting to the MCP server.
+
+**Current behavior**:
+1. OAuth flow completes successfully
+2. Token is issued and stored
+3. Claude.ai receives the token
+4. Claude.ai redirects to `/new` (new conversation) instead of connecting to MCP
+
+**Expected behavior**: Claude should automatically attempt to connect to the MCP server after receiving the OAuth token.
+
+**Status**: Root cause unknown. Need to investigate what signals Claude.ai needs to reconnect.
+
+## 🔴 KNOWN ISSUE: OAuth Resource Parameter Missing
+
+**Problem**: After OAuth completes, Claude.ai redirects to /new instead of reconnecting to MCP server.
+
+**Root Cause**: We're not handling the `resource` parameter from RFC 8707 that tells Claude which MCP server the OAuth is for.
+
+**Required Fix**:
+1. Accept `resource` param in `/authorize` endpoint
+2. Store it through the auth flow (frob → code → token)
+3. Include it in token response
+4. Update `/.well-known/oauth-protected-resource` to properly identify MCP endpoint
+
+**Status**: Identified but not implemented. This is why Claude doesn't auto-connect after auth.
+
 ## 🚀 DEPLOYMENT STATUS: McpAgent.serve() Implementation
 
 ### Expected Test Outcomes
