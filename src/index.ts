@@ -80,100 +80,63 @@ app.get('/.well-known/oauth-protected-resource', (c) => {
   });
 });
 
-// MCP endpoint with authentication
+// MCP endpoint handler
 app.all('/mcp', async (c) => {
-  const logger = c.get('debugLogger');
-  
-  // Debug log the serve method existence
-  console.log('[Debug] RtmMCP.serve exists?', typeof RtmMCP.serve);
-  
-  // Create the handler
-  const mcpHandler = RtmMCP.serve('/mcp');
-  console.log('[Debug] mcpHandler created:', !!mcpHandler);
-  
-  await logger.log('mcp_request_start', {
-    endpoint: '/mcp',
-    method: c.req.method,
-    hasAuth: !!c.req.header('Authorization'),
+  // Extract token from Authorization header
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.replace('Bearer ', '');
+
+  logger.info('[MCP Auth] Headers received', {
+    hasAuth: !!authHeader,
+    authType: authHeader?.split(' ')[0],
+    tokenLength: token?.length,
+    contentType: c.req.header('Content-Type'),
+    acceptHeader: c.req.header('Accept'),
     sessionId: c.req.header('Mcp-Session-Id')
   });
 
-  const authHeader = c.req.header('Authorization');
-  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
-  
-  // For MCP requests, we need to check auth
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log('[MCP Auth] Missing or invalid auth header');
-    
-    c.header('WWW-Authenticate', 
-      `Bearer realm="${baseUrl}/mcp", ` +
-      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`
-    );
-    
-    return c.json({ 
-      error: 'unauthorized',
-      error_description: 'Bearer token required' 
-    }, 401);
+  if (!token) {
+    logger.error('[MCP Auth] No token provided');
+    return c.json({ error: 'No authorization token provided' }, 401);
   }
 
-  const token = authHeader.substring(7);
-  const tokenData = await c.env.AUTH_STORE.get(`token:${token}`);
-  
-  if (!tokenData) {
-    console.log('[MCP Auth] Token not found in store');
-    
-    c.header('WWW-Authenticate', 
-      `Bearer realm="${baseUrl}/mcp", ` +
-      `error="invalid_token", ` +
-      `error_description="The access token is invalid", ` +
-      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`
-    );
-    
-    return c.json({ 
-      error: 'invalid_token',
-      error_description: 'The access token is invalid' 
-    }, 401);
-  }
-
-  const { userName, userId } = JSON.parse(tokenData);
-  console.log('[MCP Auth] Token valid:', { userName, userId });
-  
-  // Debug log before setting props
-  console.log('[Debug] About to set props on executionCtx:', {
-    hasExecutionCtx: !!c.executionCtx,
-    executionCtxType: typeof c.executionCtx,
-    executionCtxKeys: Object.keys(c.executionCtx || {})
-  });
-  
-  // Set props directly on execution context
-  (c.executionCtx as any).props = { 
-    rtmToken: token, 
-    userName, 
-    userId 
-  };
-  
-  console.log('[Debug] Props set, calling mcpHandler.fetch');
-  
-  // Now delegate to McpAgent's handler with the authenticated context
-  try {
-    const response = await mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
-    console.log('[Debug] mcpHandler.fetch returned:', {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries())
+  // Validate token and get user info
+  const validation = await rtmHandler.validateToken(token);
+  if (!validation.isValid || !validation.userName || !validation.userId) {
+    logger.error('[MCP Auth] Token validation failed', { 
+      isValid: validation.isValid,
+      hasUserName: !!validation.userName,
+      hasUserId: !!validation.userId
     });
-    return response;
-  } catch (error) {
-    console.error('[MCP] Handler error:', error);
-    return c.json({
-      jsonrpc: "2.0",
-      error: {
-        code: -32603,
-        message: "Internal server error",
-        data: error.message
-      },
-      id: null
-    }, 500);
+    return c.json({ error: 'Invalid or expired token' }, 401);
   }
+
+  logger.info('[MCP Auth] Token valid', {
+    userName: validation.userName,
+    userId: validation.userId
+  });
+
+  // Get MCP handler
+  const mcpHandler = c.env.MCP_OBJECT;
+  logger.info('[MCP] Handler fetched', {
+    handlerType: typeof mcpHandler,
+    hasHandlerFetch: typeof mcpHandler?.fetch === 'function'
+  });
+
+  // Set props directly on execution context for McpAgent
+  (c.executionCtx as any).props = {
+    rtmToken: token,
+    userName: validation.userName,
+    userId: validation.userId
+  };
+
+  logger.info('Set props on execution context', {
+    hasProps: true,
+    userName: validation.userName,
+    hasToken: !!token
+  });
+
+  return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
 });
 
 // Debug endpoint with enhanced dashboard
