@@ -44,10 +44,9 @@
 │   ├── env.d.ts
 │   └── index.spec.ts
 ├── test1.sh
-├── tree.txt
 ├── tsconfig.json
 ├── vitest.config.mts
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 45 files
+6 directories, 44 files
