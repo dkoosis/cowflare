@@ -1,0 +1,131 @@
+.
+├── backup
+│   ├── mcp-server-bearer-auth
+│   │   ├── biome.json
+│   │   ├── img
+│   │   │   ├── available-tools.png
+│   │   │   ├── claude-does-math-the-fancy-way.png
+│   │   │   ├── mcp-inspector-oauth-success.png
+│   │   │   ├── mcp-inspector-sse-config.png
+│   │   │   ├── mcp-inspector-successful-tool-call.png
+│   │   │   └── mcp-login.png
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── index.ts
+│   │   │   └── utils.ts
+│   │   ├── static
+│   │   │   ├── img -> ../img
+│   │   │   └── README.md
+│   │   ├── tsconfig.json
+│   │   ├── worker-configuration.d.ts
+│   │   └── wrangler.jsonc
+│   ├── remote-mcp-authless
+│   │   ├── biome.json
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   └── index.ts
+│   │   ├── tsconfig.json
+│   │   ├── worker-configuration.d.ts
+│   │   └── wrangler.jsonc
+│   ├── remote-mcp-github-oauth
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── github-handler.ts
+│   │   │   ├── index.ts
+│   │   │   ├── utils.ts
+│   │   │   └── workers-oauth-utils.ts
+│   │   ├── tsconfig.json
+│   │   ├── worker-configuration.d.ts
+│   │   └── wrangler.jsonc
+│   ├── remote-mcp-google-oauth
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── google-handler.ts
+│   │   │   ├── index.ts
+│   │   │   ├── utils.ts
+│   │   │   └── workers-oauth-utils.ts
+│   │   ├── tsconfig.json
+│   │   ├── worker-configuration.d.ts
+│   │   └── wrangler.jsonc
+│   ├── remote-mcp-server
+│   │   ├── biome.json
+│   │   ├── img
+│   │   │   ├── available-tools.png
+│   │   │   ├── claude-does-math-the-fancy-way.png
+│   │   │   ├── mcp-inspector-oauth-success.png
+│   │   │   ├── mcp-inspector-sse-config.png
+│   │   │   ├── mcp-inspector-successful-tool-call.png
+│   │   │   └── mcp-login.png
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── app.ts
+│   │   │   ├── index.ts
+│   │   │   └── utils.ts
+│   │   ├── static
+│   │   │   ├── img -> ../img
+│   │   │   └── README.md
+│   │   ├── tsconfig.json
+│   │   ├── worker-configuration.d.ts
+│   │   └── wrangler.jsonc
+│   └── src_backup
+│       ├── auth.ts
+│       ├── index.ts
+│       ├── validation.js
+│       └── validation.ts
+├── claude_cleaned.json
+├── docs
+│   ├── _index.md
+│   ├── adr-architecture-core.md
+│   ├── adr-architecture-transport-hybrid.md
+│   ├── adr-auth-rtm-desktop-flow.md
+│   ├── adr-client-web-first.md
+│   ├── adr-platform-cloudflare.md
+│   ├── adr-platform-dependencies.md
+│   ├── adr-platform-typescript.md
+│   ├── adr-practices-telemetry.md
+│   ├── reference
+│   │   ├── cloudflare_agent.ts
+│   │   ├── llms-full.txt
+│   │   ├── schema.ts
+│   │   └── ts-sdk.md
+│   ├── rtm-mcp-debug-logs.json
+│   ├── TODO.md
+│   └── tree.txt
+├── har_cleaner.py
+├── inspector-config.json
+├── mcp-debug.js
+├── out.txt
+├── package.json
+├── README.md
+├── spec-test.sh
+├── src
+│   ├── debug-logger.ts
+│   ├── index.ts
+│   ├── protocol-logger.ts
+│   ├── rtm-api.ts
+│   ├── rtm-handler.ts
+│   ├── rtm-mcp.ts
+│   ├── schemas
+│   │   ├── auth-schemas.ts
+│   │   ├── index.ts
+│   │   ├── list-schemas.ts
+│   │   ├── task-schemas.ts
+│   │   └── utility-schemas.ts
+│   ├── types.ts
+│   └── utils.ts
+├── test
+│   ├── env.d.ts
+│   └── index.spec.ts
+├── test1.sh
+├── tree.txt
+├── tsconfig.json
+├── vitest.config.mts
+├── worker-configuration.d.ts
+└── wrangler.toml
+
+24 directories, 105 files

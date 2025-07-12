@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { getCookie, setCookie } from 'hono/cookie';
 import { RtmMCP } from './rtm-mcp';
 import { withDebugLogging } from './debug-logger';
-import { rtmHandler } from './rtm-handler';
+import { createRtmHandler } from './rtm-handler';
 import type { Env } from './types';
 
 // Create the Hono app
@@ -22,7 +22,47 @@ app.use('*', cors({
 }));
 
 // Mount the RTM OAuth handler for all its routes
+const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
+
+// OAuth Authorization Server metadata - required by Claude.ai
+app.get('/.well-known/oauth-authorization-server', (c) => {
+  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  
+  console.log('[OAuth AS Metadata] Request received');
+  
+  return c.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
+    registration_endpoint: `${baseUrl}/register`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code'],
+    code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: ['none']
+  });
+});
+
+// Dynamic Client Registration - required by Claude.ai
+app.post('/register', (c) => {
+  const logger = c.get('debugLogger');
+  logger.log('client_registration', {
+    endpoint: '/register',
+    body: c.req.body
+  });
+  
+  // Return a mock client registration
+  const clientId = crypto.randomUUID();
+  return c.json({
+    client_id: clientId,
+    client_secret: '', // Public client
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    grant_types: ['authorization_code'],
+    response_types: ['code'],
+    redirect_uris: ['https://claude.ai/auth/callback'],
+    token_endpoint_auth_method: 'none'
+  });
+});
 
 // OAuth well-known endpoint - required by Claude.ai
 app.get('/.well-known/oauth-protected-resource', (c) => {
