@@ -624,11 +624,8 @@ export function createDebugDashboard() {
                             </span>
                           ` : ''}
                           ${event.data && Object.keys(event.data).length > 0 ? `
-                            <div class="json-viewer">
-                              ${prettyPrintJson(event.data)}
-                            </div>
-                          ` : ''}
-                        </div>
+                            <div class="event-data">${JSON.stringify(event.data, null, 2)}</div>
+                          ` : ''}                        </div>
                       `;
                     }).join('')}
                   </div>

@@ -90,62 +90,47 @@ app.post('/register', (c) => {
 
 
 // MCP endpoint handler
+// Add comprehensive logging to trace MCP connection attempts
 app.all('/mcp', async (c) => {
-  // Extract token from Authorization header
-  const authHeader = c.req.header('Authorization');
-  const token = authHeader?.replace('Bearer ', '');
-
-  logger.info('[MCP Auth] Headers received', {
-    hasAuth: !!authHeader,
-    authType: authHeader?.split(' ')[0],
-    tokenLength: token?.length,
-    contentType: c.req.header('Content-Type'),
-    acceptHeader: c.req.header('Accept'),
-    sessionId: c.req.header('Mcp-Session-Id')
+  const logger = c.get('debugLogger');
+  
+  // Log EVERYTHING about the request
+  await logger.log('mcp_request_full_trace', {
+    method: c.req.method,
+    headers: Object.fromEntries(c.req.raw.headers.entries()),
+    url: c.req.url,
+    hasBody: !!c.req.body,
+    sessionId: c.req.header('Mcp-Session-Id'),
+    authorization: c.req.header('Authorization')?.substring(0, 20) + '...'
   });
 
-  if (!token) {
-    logger.error('[MCP Auth] No token provided');
-    return c.json({ error: 'No authorization token provided' }, 401);
+  // Log request body if present
+  if (c.req.method === 'POST') {
+    try {
+      const body = await c.req.text();
+      await logger.log('mcp_request_body', { 
+        body: body.substring(0, 500),
+        length: body.length 
+      });
+      // Re-parse for handler
+      c.req.raw = new Request(c.req.raw, { body });
+    } catch (e) {
+      await logger.log('mcp_body_parse_error', { error: e.message });
+    }
   }
 
-  // Validate token and get user info
-  const validation = await rtmHandler.validateToken(token);
-  if (!validation.isValid || !validation.userName || !validation.userId) {
-    logger.error('[MCP Auth] Token validation failed', { 
-      isValid: validation.isValid,
-      hasUserName: !!validation.userName,
-      hasUserId: !!validation.userId
-    });
-    return c.json({ error: 'Invalid or expired token' }, 401);
-  }
-
-  logger.info('[MCP Auth] Token valid', {
-    userName: validation.userName,
-    userId: validation.userId
+  // ... rest of auth logic ...
+  
+  // After successful auth, log the response
+  const response = await mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
+  
+  await logger.log('mcp_response_trace', {
+    status: response.status,
+    headers: Object.fromEntries(response.headers.entries()),
+    hasSessionId: !!response.headers.get('Mcp-Session-Id')
   });
-
-  // Get MCP handler
-  const mcpHandler = c.env.MCP_OBJECT;
-  logger.info('[MCP] Handler fetched', {
-    handlerType: typeof mcpHandler,
-    hasHandlerFetch: typeof mcpHandler?.fetch === 'function'
-  });
-
-  // Set props directly on execution context for McpAgent
-  (c.executionCtx as any).props = {
-    rtmToken: token,
-    userName: validation.userName,
-    userId: validation.userId
-  };
-
-  logger.info('Set props on execution context', {
-    hasProps: true,
-    userName: validation.userName,
-    hasToken: !!token
-  });
-
-  return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
+  
+  return response;
 });
 
 // Debug endpoint with enhanced dashboard
