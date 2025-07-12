@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const SERVER_URL = 'https://cowflare.vcto-6e7.workers.dev';
+const SERVER_URL = 'https://rtm-mcp-server.vcto-6e7.workers.dev';
 
 async function testMCPMethod(method, params = {}) {
   const payload = {

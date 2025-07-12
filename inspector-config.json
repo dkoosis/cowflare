@@ -30,7 +30,7 @@
           }
         }
         
-        const transport = new HttpTransport('https://cowflare.vcto-6e7.workers.dev');
+        const transport = new HttpTransport('https://rtm-mcp-server.vcto-6e7.workers.dev');
         
         // Simple stdio bridge
         process.stdin.on('data', async (data) => {

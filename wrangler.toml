@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Production configuration is now the default
 [vars]
-SERVER_URL = "https://rtm-mcp-server.vcto-6e7.workers.dev"
+SERVER_URL = "https://cowflare.vcto-6e7.workers.dev"
 
 [[kv_namespaces]]
 binding = "AUTH_STORE"
