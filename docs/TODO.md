@@ -171,3 +171,145 @@ app.get('/health', (c) => {
 Enhance the health check to be much more useful and detailed
 
 ## Show debug log in local friendly time. 
+
+## Code Architecture Refactoring
+
+**⚠️ PREREQUISITE**: Complete MCP streaming debug first. Do not refactor during active debugging.
+
+### 🔴 P0: Critical - God Module Decomposition (After MCP Works)
+
+**Problem**: `src/index.ts` violates Single Responsibility Principle by handling routing, auth, MCP protocol, and RTM communication.
+
+**Action**: Split into focused modules:
+
+```typescript
+// src/server/router.ts - HTTP routing only
+import { Hono } from 'hono';
+export function createRouter(handlers: Handlers) {
+  const app = new Hono();
+  // Move all route definitions here
+  return app;
+}
+
+// src/mcp/handler.ts - MCP protocol logic
+export class McpRequestHandler {
+  async handleRequest(request: Request, env: Env, ctx: ExecutionContext) {
+    // Move MCP-specific logic here
+  }
+}
+
+// src/rtm/service.ts - RTM API wrapper
+export class RtmService {
+  constructor(private api: RtmApi) {}
+  async createTimeline(params: TimelineParams) {
+    // Consolidate all RTM operations
+  }
+}
+
+// src/auth/middleware.ts - Token validation
+export const authMiddleware = async (c: Context, next: Next) => {
+  // Extract auth logic from current /mcp endpoint
+};
+```
+
+### 🟡 P1: High - Fix Change Preventers
+
+**Problem**: Shotgun Surgery pattern - any RTM API change requires touching multiple files.
+
+**Action 1**: Consolidate RTM API calls
+```typescript
+// src/rtm/api.ts - Add base method
+private async _callRtmApi(method: string, params: Record<string, any>) {
+  const url = this.buildUrl(method, params);
+  const response = await fetch(url);
+  // Common error handling, auth, etc.
+  return this.parseResponse(response);
+}
+
+// Refactor all public methods to use it
+async getTasks(params: GetTasksParams) {
+  return this._callRtmApi('rtm.tasks.getList', params);
+}
+```
+
+**Action 2**: Move business logic to service layer
+```typescript
+// Instead of this in request-handler.ts:
+const lists = await rtmApi.getLists();
+const tasks = await rtmApi.getTasks();
+const timeline = // complex logic
+
+// Do this:
+const timeline = await rtmService.createTimeline(params);
+```
+
+### 🔵 P2: Medium - Type Safety & Organization
+
+**Action 1**: Create domain boundaries
+```bash
+# Run these commands to create structure:
+mkdir -p src/server src/mcp src/rtm src/shared
+git mv src/index.ts src/server/index.ts
+git mv src/rtm-api.ts src/rtm/api.ts
+git mv src/types.ts src/shared/types.ts
+```
+
+**Action 2**: Add branded types for IDs
+```typescript
+// src/shared/branded-types.ts
+type Brand<K, T> = K & { __brand: T };
+export type FrobId = Brand<string, 'FrobId'>;
+export type TimelineId = Brand<string, 'TimelineId'>;
+export type TaskId = Brand<string, 'TaskId'>;
+export type ListId = Brand<string, 'ListId'>;
+
+// Helper functions
+export const FrobId = (id: string): FrobId => id as FrobId;
+export const TimelineId = (id: string): TimelineId => id as TimelineId;
+```
+
+**Action 3**: Replace long switch with command pattern
+```typescript
+// src/mcp/commands.ts
+const commands: Record<string, CommandHandler> = {
+  'timeline/create': handleTimelineCreation,
+  'tasks/get': handleGetTasks,
+  'task/add': handleAddTask,
+  // etc.
+};
+
+// In processRequest:
+const handler = commands[method];
+if (!handler) throw new Error(`Unknown method: ${method}`);
+return handler(params);
+```
+
+### ⚪ P3: Low - Cleanup
+
+**Action**: Merge utils.ts into rtm/formatters.ts if RTM-specific, or delete if unused.
+
+### 📋 Refactoring Checklist
+
+Before starting each refactoring:
+- [ ] MCP streaming is working in production
+- [ ] Create integration test for current behavior
+- [ ] Create feature branch
+- [ ] Refactor one module at a time
+- [ ] Run tests after each change
+- [ ] Deploy to staging first
+
+### 🎯 Success Metrics
+
+- [ ] Each file has single, clear responsibility
+- [ ] RTM API changes require edits to only `src/rtm/` directory
+- [ ] Adding new MCP tools doesn't touch server code
+- [ ] TypeScript catches ID type mismatches at compile time
+- [ ] Can add Spektrix integration without modifying RTM code
+
+### 📚 Architecture Decisions to Document
+
+After refactoring, create ADRs for:
+1. Domain boundary definitions (server vs MCP vs integrations)
+2. ID type strategy (branded types vs classes)
+3. Command pattern for MCP method routing
+4. Service layer abstraction pattern for external APIs

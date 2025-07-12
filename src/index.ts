@@ -1,66 +1,58 @@
-// Updated src/index.ts - Properly integrating McpAgent.serve() with authentication
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { getCookie, setCookie } from "hono/cookie";
-import { createRtmHandler } from "./rtm-handler";
-import { RtmMCP } from "./rtm-mcp";
-import { McpAgent } from "agents/mcp";
-import type { Env } from "./types";
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { getCookie, setCookie } from 'hono/cookie';
+import { RtmMCP } from './rtm-mcp';
+import { withDebugLogging } from './debug-logger';
+import { rtmHandler } from './rtm-handler';
+import type { Env } from './types';
 
+// Create the Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// Add CORS middleware
-app.use('/*', cors({
-  origin: ['https://claude.ai', 'http://localhost:*'],
-  allowMethods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
-  allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id'],
+// Apply debug logging middleware globally
+app.use('*', withDebugLogging);
+
+// Enable CORS for all routes
+app.use('*', cors({
+  origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
   credentials: true,
-  exposedHeaders: ['Mcp-Session-Id']
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Mcp-Session-Id'],
+  exposeHeaders: ['Mcp-Session-Id', 'Location']
 }));
 
-// Mount the OAuth2 adapter endpoints
-const rtmHandler = createRtmHandler();
+// Mount the RTM OAuth handler for all its routes
 app.route('/', rtmHandler);
 
-// MCP SPEC REQUIREMENT: Protected Resource Metadata
-app.get('/.well-known/oauth-protected-resource', async (c) => {
-  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
-  
-  // Log this critical discovery request
-  const { DebugLogger } = await import('./debug-logger');
-  const logger = new DebugLogger(c.env);
-  await logger.log('protected_resource_discovery', {
+// OAuth well-known endpoint - required by Claude.ai
+app.get('/.well-known/oauth-protected-resource', (c) => {
+  const logger = c.get('debugLogger');
+  logger.log('well_known_request', {
     endpoint: '/.well-known/oauth-protected-resource',
-    user_agent: c.req.header('User-Agent'),
-    referer: c.req.header('Referer'),
-    authorization: !!c.req.header('Authorization')
+    host: c.req.header('host'),
+    origin: c.req.header('origin')
   });
-  
-  console.log('[Protected Resource Metadata] Request received');
-  
-  const metadata = {
-    resource: `${baseUrl}/mcp`,
-    authorization_servers: [baseUrl],
-    bearer_methods_supported: ['header'],
-    resource_signing_alg_values_supported: ['none'],
-    resource_documentation: baseUrl,
-    scopes_supported: ['read', 'delete']
-  };
-  
-  return c.json(metadata);
+
+  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
+  return c.json({
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`
+  });
 });
 
-// Create the MCP handler using McpAgent's built-in serve() method
-const mcpHandler = McpAgent.serve('/mcp', {
-  binding: 'MCP_OBJECT',  // This matches the Durable Object binding name in wrangler.toml
-  corsOptions: {
-    origin: '*', // CORS is already handled by Hono middleware
-  }
-});
-
-// Handle MCP requests with authentication
+// MCP endpoint with authentication
 app.all('/mcp', async (c) => {
-  console.log('[MCP] Request:', {
+  const logger = c.get('debugLogger');
+  
+  // Debug log the serve method existence
+  console.log('[Debug] RtmMCP.serve exists?', typeof RtmMCP.serve);
+  
+  // Create the handler
+  const mcpHandler = RtmMCP.serve('/mcp');
+  console.log('[Debug] mcpHandler created:', !!mcpHandler);
+  
+  await logger.log('mcp_request_start', {
+    endpoint: '/mcp',
     method: c.req.method,
     hasAuth: !!c.req.header('Authorization'),
     sessionId: c.req.header('Mcp-Session-Id')
@@ -106,20 +98,29 @@ app.all('/mcp', async (c) => {
   const { userName, userId } = JSON.parse(tokenData);
   console.log('[MCP Auth] Token valid:', { userName, userId });
   
-  // Create an extended execution context with props
-  const extendedCtx = {
-    ...c.executionCtx,
-    props: {
-      rtmToken: token,
-      userName,
-      userId
-    }
+  // Debug log before setting props
+  console.log('[Debug] About to set props on executionCtx:', {
+    hasExecutionCtx: !!c.executionCtx,
+    executionCtxType: typeof c.executionCtx,
+    executionCtxKeys: Object.keys(c.executionCtx || {})
+  });
+  
+  // Set props directly on execution context
+  (c.executionCtx as any).props = { 
+    rtmToken: token, 
+    userName, 
+    userId 
   };
+  
+  console.log('[Debug] Props set, calling mcpHandler.fetch');
   
   // Now delegate to McpAgent's handler with the authenticated context
   try {
-    // The mcpHandler.fetch expects (request, env, ctx)
-    const response = await mcpHandler.fetch(c.req.raw, c.env, extendedCtx);
+    const response = await mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
+    console.log('[Debug] mcpHandler.fetch returned:', {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries())
+    });
     return response;
   } catch (error) {
     console.error('[MCP] Handler error:', error);
@@ -143,12 +144,16 @@ app.get('/debug', async (c) => {
 
 // Health check endpoint
 app.get('/health', (c) => {
+  const deployedAt = new Date().toISOString();
   return c.json({ 
     status: 'ok',
     service: 'rtm-mcp-server',
-    version: '2.4.0',
+    version: '2.5.0',
     transport: 'streamable-http',
-    mcp_compliant: true
+    mcp_compliant: true,
+    deployed_at: deployedAt,
+    has_serve_method: typeof RtmMCP.serve === 'function',
+    agents_version: '0.0.103'
   });
 });
 

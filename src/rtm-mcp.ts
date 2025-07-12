@@ -1,182 +1,221 @@
-// File: src/rtm-mcp.ts
-import { McpAgent } from "agents/mcp";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { RtmApi } from "./rtm-api";
-import * as schemas from "./schemas";
-import { toInputSchema } from "./schemas/index";
-import type { Env } from "./types";
+import { McpAgent } from 'agents/mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { RtmApi } from './rtm-api';
+import type { Env } from './types';
+import * as schemas from './schemas/task-schemas';
 
-export type Props = {
-  rtmToken: string;
-  userName: string;
-  userId: string;
-};
-
-type State = null;
-
-export class RtmMCP extends McpAgent<Env, State, Props> {
-  // McpAgent expects this to be a property, not a method
+/**
+ * Remember The Milk MCP Server
+ * Implements MCP tools for task management via RTM API
+ */
+export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: string; userId?: string }> {
+  private rtmToken?: string;
+  private userName?: string;
+  private userId?: string;
+  
   server = new McpServer({
-    name: "Remember The Milk MCP Server",
-    version: "2.4.0",
+    name: 'remember-the-milk',
+    version: '1.0.0',
   });
 
-  private api!: RtmApi;
-
-  constructor(state: DurableObjectState, env: Env) {
-    super(state, env);
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    console.log('[RtmMCP] Constructor called');
+    console.log('[RtmMCP] Constructor - available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(this)));
+    console.log('[RtmMCP] Constructor - McpAgent methods:', Object.getOwnPropertyNames(McpAgent.prototype));
   }
 
-  // This is called by McpAgent when initializing
   async init() {
-    console.log('[RtmMCP] Initializing with props:', { 
-      hasToken: !!this.props?.rtmToken,
-      userName: this.props?.userName,
-      userId: this.props?.userId
-    });
+    console.log('[RtmMCP] Init called');
+    console.log('[RtmMCP] Init - this.props:', JSON.stringify(this.props));
+    console.log('[RtmMCP] Init - props type:', typeof this.props);
+    console.log('[RtmMCP] Init - props keys:', this.props ? Object.keys(this.props) : 'props is undefined');
     
-    if (!this.props?.rtmToken) {
-      console.error('[RtmMCP] No RTM token provided in props');
-      throw new Error('RTM token is required to initialize the agent.');
+    if (!this.props) {
+      console.error('[RtmMCP] ERROR: No props object available!');
+      // Initialize without auth for debugging
+      this.rtmToken = undefined;
+      this.userName = 'No Auth';
+      this.userId = 'no-auth';
+    } else {
+      // Access props
+      this.rtmToken = this.props.rtmToken;
+      this.userName = this.props.userName || 'Unknown';
+      this.userId = this.props.userId || 'unknown';
+      
+      console.log('[RtmMCP] Props extracted:', {
+        hasToken: !!this.rtmToken,
+        userName: this.userName,
+        userId: this.userId,
+        tokenLength: this.rtmToken?.length
+      });
     }
+
+    // Register all RTM tools
+    this.registerTools();
     
-    this.api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-
-    // Test Connection Tool
-    this.server.tool(
-      "test_connection",
-      {
-        description: "Test the MCP server connection",
-        inputSchema: toInputSchema(z.object({}))
-      },
-      async () => ({
-        content: [{
-          type: "text",
-          text: `✅ Connection successful! Connected as: ${this.props.userName}\n\nAvailable tools:
-- rtm_get_lists: Get all your RTM lists
-- rtm_add_task: Add new tasks
-- rtm_complete_task: Mark tasks as complete
-- rtm_get_tasks: Get tasks from lists
-- rtm_search_tasks: Search tasks`
-        }]
-      })
-    );
-
-    // Get Lists Tool
-    this.server.tool(
-      "rtm_get_lists",
-      {
-        description: "Get all RTM lists",
-        inputSchema: toInputSchema(z.object({}))
-      },
-      async () => {
-        const response = await this.api.makeRequest('rtm.lists.getList', {
-          auth_token: this.props.rtmToken
-        });
-        return {
-          content: [{
-            type: "text",
-            text: this.api.formatLists(response.lists.list)
-          }]
-        };
-      }
-    );
-
-    // Add Task Tool
-    this.server.tool(
-      "rtm_add_task",
-      {
-        description: "Add a new task to RTM",
-        inputSchema: toInputSchema(schemas.AddTaskSchema.omit({ auth_token: true, timeline: true }))
-      },
-      async (args) => {
-        const timeline = await this.api.createTimeline(this.props.rtmToken);
-        const response = await this.api.makeRequest('rtm.tasks.add', {
-          auth_token: this.props.rtmToken,
-          timeline,
-          ...args
-        });
-        return {
-          content: [{
-            type: "text",
-            text: `Task added: ${response.list.taskseries.name} (ID: ${response.list.taskseries.id})`
-          }]
-        };
-      }
-    );
-
-    // Complete Task Tool
-    this.server.tool(
-      "rtm_complete_task",
-      {
-        description: "Mark a task as complete",
-        inputSchema: toInputSchema(schemas.CompleteTaskSchema.omit({ auth_token: true, timeline: true }))
-      },
-      async (args) => {
-        const timeline = await this.api.createTimeline(this.props.rtmToken);
-        const response = await this.api.makeRequest('rtm.tasks.complete', {
-          auth_token: this.props.rtmToken,
-          timeline,
-          ...args
-        });
-        return {
-          content: [{
-            type: "text",
-            text: `Task completed: ${response.list.taskseries[0].name}`
-          }]
-        };
-      }
-    );
-
-    // Get Tasks Tool
-    this.server.tool(
-      "rtm_get_tasks",
-      {
-        description: "Get tasks from RTM lists",
-        inputSchema: toInputSchema(schemas.GetTasksSchema.omit({ auth_token: true }))
-      },
-      async (args) => {
-        const response = await this.api.makeRequest('rtm.tasks.getList', {
-          auth_token: this.props.rtmToken,
-          ...args
-        });
-        return {
-          content: [{
-            type: "text",
-            text: this.api.formatTasks(response.tasks.list)
-          }]
-        };
-      }
-    );
-
-    // Search Tasks Tool
-    this.server.tool(
-      "rtm_search_tasks",
-      {
-        description: "Search for tasks in RTM",
-        inputSchema: toInputSchema(schemas.SearchTasksSchema.omit({ auth_token: true }))
-      },
-      async (args) => {
-        const filter = args.filter || args.query || "";
-        const response = await this.api.makeRequest('rtm.tasks.getList', {
-          auth_token: this.props.rtmToken,
-          filter
-        });
-        return {
-          content: [{
-            type: "text",
-            text: this.api.formatTasks(response.tasks.list)
-          }]
-        };
-      }
-    );
+    console.log('[RtmMCP] Init complete, tools registered');
   }
 
-  // Remove the custom fetch method - McpAgent handles all transport logic
-  // The base McpAgent class will handle:
-  // - WebSocket connections
-  // - Streamable HTTP transport
-  // - Session management
-  // - Message routing
+  private registerTools() {
+    // Timeline creation tool
+    this.server.tool(
+      'timeline/create',
+      'Create a new timeline for undoable operations',
+      schemas.CreateTimelineSchema,
+      async (args) => {
+        console.log('[RtmMCP] Tool called: timeline/create');
+        if (!args.auth_token) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Authentication token is required'
+            }]
+          };
+        }
+
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          const timeline = await api.createTimeline(args.auth_token);
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `Timeline created: ${timeline}`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error creating timeline: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Get tasks tool
+    this.server.tool(
+      'tasks/get',
+      'Get tasks from a specific list or all lists',
+      schemas.GetTasksSchema,
+      async (args) => {
+        console.log('[RtmMCP] Tool called: tasks/get');
+        if (!args.auth_token) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Authentication token is required'
+            }]
+          };
+        }
+
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          const tasks = await api.getTasks({
+            auth_token: args.auth_token,
+            list_id: args.list_id,
+            filter: args.filter
+          });
+          
+          const taskList = tasks.map(task => 
+            `- ${task.name} (ID: ${task.id})${task.due ? ` - Due: ${task.due}` : ''}`
+          ).join('\n');
+          
+          return {
+            content: [{
+              type: 'text',
+              text: taskList || 'No tasks found'
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error getting tasks: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Add task tool
+    this.server.tool(
+      'task/add',
+      'Add a new task to Remember The Milk',
+      schemas.AddTaskSchema,
+      async (args) => {
+        console.log('[RtmMCP] Tool called: task/add');
+        if (!args.auth_token || !args.timeline) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Authentication token and timeline are required'
+            }]
+          };
+        }
+
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          const task = await api.addTask(args);
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `Task added: "${task.name}" (ID: ${task.id})`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error adding task: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Complete task tool
+    this.server.tool(
+      'task/complete',
+      'Mark a task as completed',
+      schemas.CompleteTaskSchema,
+      async (args) => {
+        console.log('[RtmMCP] Tool called: task/complete');
+        if (!args.auth_token || !args.timeline) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Authentication token and timeline are required'
+            }]
+          };
+        }
+
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          await api.completeTask(args);
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `Task ${args.task_id} marked as complete`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error completing task: ${error.message}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Add more tools as needed...
+    console.log('[RtmMCP] Registered tools:', this.server.getTools().map(t => t.name));
+  }
 }
