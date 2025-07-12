@@ -1,6 +1,63 @@
 # Debug Log - RTM MCP Integration (Updated)
 
 # TODO
+# TODO - Next Work Session
+
+## ✅ What We've Already Fixed
+1. **McpAgent props** - Execution context now properly passes auth data
+2. **RFC compliance** - oauth-protected-resource returns correct format
+3. **Debug logging** - Enhanced /mcp tracing ready to capture attempts
+4. **Debug dashboard** - Fixed rendering error
+
+## 🔴 CORE ISSUE: Claude.ai Doesn't Reconnect After OAuth
+
+**Current State**: OAuth completes perfectly, but Claude redirects to /new instead of connecting to MCP.
+
+**What we KNOW**:
+- OAuth flow: ✅ Works
+- Token exchange: ✅ Works  
+- Discovery endpoints: ✅ Claude requests both
+- MCP connection attempt: ❌ Never happens
+- Result: Claude redirects to /new
+
+## 🎯 Next Session Focus
+
+### 1. Test with MCP Inspector First
+```bash
+npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/mcp
+```
+If Inspector connects, our server works. The issue is Claude-specific.
+
+### 2. Check Debug Dashboard for Clues
+Look for any `/mcp` requests after token exchange. We now have enhanced logging.
+
+### 3. Research Working Examples
+Find MCP servers that DO reconnect with Claude.ai after OAuth. What's different?
+
+### 4. Hypothesis to Test
+- Missing response headers?
+- Wrong token format?  
+- Need different OAuth flow?
+- Resource parameter not propagated?
+
+## 🚫 Don't Repeat These
+- Props fix (done)
+- RFC compliance (done)
+- Basic OAuth flow (works)
+
+## 🔴 KNOWN ISSUE: OAuth Resource Parameter Missing
+
+**Problem**: After OAuth completes, Claude.ai redirects to /new instead of reconnecting to MCP server.
+
+**Root Cause**: We're not handling the `resource` parameter from RFC 8707 that tells Claude which MCP server the OAuth is for.
+
+**Required Fix**:
+1. Accept `resource` param in `/authorize` endpoint
+2. Store it through the auth flow (frob → code → token)
+3. Include it in token response
+4. Update `/.well-known/oauth-protected-resource` to properly identify MCP endpoint
+
+**Status**: Identified but not implemented. This is why Claude doesn't auto-connect after auth.
 
 ## 🔴 CORE ISSUE: Claude.ai Doesn't Reconnect After OAuth
 
