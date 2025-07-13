@@ -15,8 +15,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   private userId?: string;
   
   server = new McpServer({
-    //    name: 'remember-the-milk',
-    name: 'spooky',
+    name: 'rtm',
     version: '1.0.0',
   });
 
