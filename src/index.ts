@@ -1,9 +1,25 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { RtmMCP } from './rtm-mcp';
-import { withDebugLogging } from './debug-logger';
+import { withDebugLogging, DebugLogger } from './debug-logger';
 import { createRtmHandler } from './rtm-handler';
 import type { Env } from './types';
+
+// Generate friendly deployment identifier
+const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear'];
+const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'lion', 'owl', 'deer', 'lynx'];
+
+const generateDeploymentName = () => {
+  const now = Date.now();
+  const adjIndex = Math.floor((now / 1000) % adjectives.length);
+  const animalIndex = Math.floor((now / 100000) % animals.length);
+  return `${adjectives[adjIndex]}-${animals[animalIndex]}`;
+};
+
+const DEPLOYMENT_NAME = generateDeploymentName();
+const DEPLOYMENT_TIME = new Date().toISOString();
+
+console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -30,7 +46,7 @@ app.route('/', rtmHandler);
 
 // Protected resource metadata endpoint
 app.get('/.well-known/oauth-protected-resource', (c) => {
-  const logger = c.get('debugLogger');
+  const logger = c.get('debugLogger') as DebugLogger;
   logger.log('oauth_discovery_resource', {
     endpoint: '/.well-known/oauth-protected-resource'
   });
@@ -45,7 +61,7 @@ app.get('/.well-known/oauth-protected-resource', (c) => {
 
 // Authorization server metadata endpoint
 app.get('/.well-known/oauth-authorization-server', (c) => {
-  const logger = c.get('debugLogger');
+  const logger = c.get('debugLogger') as DebugLogger;
   logger.log('oauth_discovery_server', {
     endpoint: '/.well-known/oauth-authorization-server'
   });
@@ -66,7 +82,7 @@ app.get('/.well-known/oauth-authorization-server', (c) => {
 
 // Dynamic client registration endpoint
 app.post('/register', (c) => {
-  const logger = c.get('debugLogger');
+  const logger = c.get('debugLogger') as DebugLogger;
   logger.log('client_registration', {
     endpoint: '/register'
   });
@@ -85,39 +101,11 @@ app.post('/register', (c) => {
 
 /**
  * MCP Protocol Handler
- * Uses McpAgent.serve() for proper protocol handling
+ * Uses RtmMCP Durable Object serve method
  */
-app.all('/mcp', async (c) => {
-  const logger = c.get('debugLogger');
-  
-  // Log MCP request for debugging
-  await logger.log('mcp_request', {
-    method: c.req.method,
-    path: c.req.path,
-    sessionId: c.req.header('Mcp-Session-Id'),
-    hasAuth: !!c.req.header('Authorization')
-  });
-
-  try {
-    // Use static serve method for proper MCP protocol handling
-    const response = await RtmMCP.serve(c.req.raw, c.env, c.executionCtx);
-    
-    // Log successful response
-    await logger.log('mcp_response', {
-      status: response.status,
-      hasSessionId: !!response.headers.get('Mcp-Session-Id')
-    });
-    
-    return response;
-  } catch (error) {
-    // Log MCP errors for debugging
-    await logger.log('mcp_error', {
-      error: error.message,
-      stack: error.stack
-    });
-    
-    return new Response('Internal Server Error', { status: 500 });
-  }
+app.all('/mcp', (c) => {
+  // Use the Durable Object's fetch method directly
+  return RtmMCP.fetch(c.req.raw, c.env, c.executionCtx);
 });
 
 /**
@@ -127,7 +115,7 @@ app.all('/mcp', async (c) => {
 // Debug dashboard
 app.get('/debug', async (c) => {
   const { createDebugDashboard } = await import('./debug-logger');
-  return createDebugDashboard()(c);
+  return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME)(c);
 });
 
 // Health check endpoint
@@ -136,9 +124,10 @@ app.get('/health', (c) => {
     status: 'ok',
     service: 'rtm-mcp-server',
     version: '2.5.0',
+    deployment_name: DEPLOYMENT_NAME,
     transport: 'streamable-http',
     mcp_compliant: true,
-    deployed_at: new Date().toISOString(),
+    deployed_at: DEPLOYMENT_TIME,
     has_serve_method: typeof RtmMCP.serve === 'function'
   });
 });

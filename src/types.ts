@@ -7,11 +7,22 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 export interface Env {
+  // Environment Variables
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
+  SERVER_URL: string;  // ← ADD THIS
+  
+  // KV Namespaces  
   AUTH_STORE: KVNamespace;
+  OAUTH_DATABASE: KVNamespace;     // ← ADD THIS
+  OAUTH_SESSIONS: KVNamespace;     // ← ADD THIS
+  OAUTH_KV: KVNamespace;           // ← ADD THIS
+  
+  // Durable Objects
   RTM_MCP: DurableObjectNamespace;
-  // This binding is injected by the OAuthProvider
+  MCP_OBJECT: DurableObjectNamespace;  // ← ADD THIS
+  
+  // OAuth Configuration
   OAUTH_PROVIDER: OAuthHelpers;
 }
 
