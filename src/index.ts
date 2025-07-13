@@ -24,7 +24,7 @@ const generateDeploymentName = () => {
 };
 
 const DEPLOYMENT_NAME = generateDeploymentName();
-const DEPLOYMENT_TIME = new Date().toISOString();
+const DEPLOYMENT_TIME_MODULE = new Date().toISOString(); // Will be epoch, but we'll fix in handlers
 
 console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
 
@@ -196,7 +196,7 @@ app.all('/mcp/*', async (c) => {
 // Debug dashboard
 app.get('/debug', async (c) => {
   const { createDebugDashboard } = await import('./debug-logger');
-  return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME)(c);
+  return createDebugDashboard(DEPLOYMENT_NAME, new Date().toISOString())(c);
 });
 
 // Health check endpoint
@@ -217,7 +217,7 @@ app.get('/health', (c) => {
     deployment_name: DEPLOYMENT_NAME,
     transport: 'streamable-http',
     mcp_compliant: true,
-    deployed_at: DEPLOYMENT_TIME,
+    deployed_at: new Date().toISOString(),
     mcp_methods: mcpMethods
   });
 });
