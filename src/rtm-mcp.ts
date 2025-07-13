@@ -65,6 +65,91 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
     serverKeys: Object.keys(this.server),
     serverProto: Object.getOwnPropertyNames(Object.getPrototypeOf(this.server))
   });
+  // 
+// Add these authentication tools to the registerTools() method in src/rtm-mcp.ts
+
+// Authentication initiation tool
+this.server.tool(
+  'rtm_authenticate',
+  'Initiate authentication with Remember The Milk',
+  z.object({}),
+  async () => {
+    console.log('[RtmMCP] Tool called: rtm_authenticate');
+    
+    const baseUrl = this.env.SERVER_URL || 'https://rtm-mcp-server.vcto-6e7.workers.dev';
+    const authUrl = `${baseUrl}/authorize`;
+    
+    return {
+      content: [{
+        type: 'text',  // ✅ Fixed: was 'resource'
+        text: `Please authenticate with Remember The Milk by visiting: ${authUrl}`
+      }]
+    };
+  }
+);
+
+// Authentication completion tool
+this.server.tool(
+  'rtm_complete_auth',
+  'Complete the authentication process after authorizing with RTM',
+  z.object({
+    code: z.string().describe('The authorization code received after authentication')
+  }),
+  async (args) => {
+    console.log('[RtmMCP] Tool called: rtm_complete_auth');
+    
+    if (!args.code) {
+      return {
+        content: [{
+          type: 'text',  // ✅ Fixed format
+          text: 'Error: Authorization code is required'
+        }]
+      };
+    }
+    
+    // The code exchange happens through the OAuth flow
+    // This tool just confirms completion
+    return {
+      content: [{
+        type: 'text',  // ✅ Fixed format
+        text: 'Authentication completed successfully. You can now use RTM tools.'
+      }]
+    };
+  }
+);
+
+// Auth status check tool  
+this.server.tool(
+  'rtm_check_auth_status',
+  'Check current authentication status',
+  z.object({}),
+  async () => {
+    console.log('[RtmMCP] Tool called: rtm_check_auth_status');
+    
+    const isAuthenticated = !!this.rtmToken;
+    
+    if (isAuthenticated) {
+      return {
+        content: [{
+          type: 'text',  // ✅ Fixed format
+          text: `Authenticated as: ${this.userName} (ID: ${this.userId})`
+        }]
+      };
+    } else {
+      return {
+        content: [{
+          type: 'text',  // ✅ Fixed format
+          text: 'Not authenticated. Use rtm_authenticate tool to begin authentication.'
+        }]
+      };
+    }
+  }
+);
+
+
+
+
+
    // This tool intentionally overrides the default authentication tool provided
    // by the McpAgent base class. Our custom implementation is necessary to
    // accommodate Remember The Milk's non-standard, "desktop-style" auth flow

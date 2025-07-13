@@ -1,10 +1,150 @@
 # TODO - RTM MCP Integration Debug Log
 
-## 🚨 CRITICAL: Always commit before deploy!
-```bash
-git add -A && git commit -m "description" && wrangler deploy
+## Session Log 2025-07-13 
+# TODO - RTM MCP Integration Debug Log
+
+## 🎯 Current Status: Testing McpAgent Architecture Fixes
+
+**Last Updated**: 2025-01-18  
+**Domain**: rtm-mcp-server.vcto-6e7.workers.dev (standardized)  
+**Next Action**: Deploy and test hypothesis about McpAgent.serve() and tool response formats
+
+## 🧠 Key Learnings (DO NOT LOSE THESE)
+
+### Understanding the Bug
+1. **McpAgent expects standard OAuth** - Built for modern OAuth2 providers with dynamic client registration
+2. **RTM uses legacy desktop flow** - Incompatible with McpAgent's assumptions
+3. **Default auth sends invalid response** - `{ "type": "resource" }` when OAuth discovery expected
+4. **Custom rtm_authenticate tool is CORRECT** - This bypasses the broken default flow
+
+### McpAgent Architecture (from Cloudflare source analysis)
+1. **Props Flow**:
+   - Props passed during OAuth completion
+   - Stored in DO storage by `_init()`
+   - Loaded from storage during `onStart()`
+   - Available in `init()` method via `this.props`
+   
+2. **Transport Types**:
+   - Stored in DO storage as "sse" or "streamable-http"
+   - We need "streamable-http" for MCP compliance
+   
+3. **Static serve() Method**:
+   - McpAgent provides a static `serve()` method
+   - This handles protocol negotiation and DO creation
+   - Critical for proper MCP handling
+
+## 🔬 Current Hypothesis (2025-01-18)
+
+### Hypothesis 1: Missing McpAgent.serve() Pattern
+**Issue**: Current `/mcp` route uses `RtmMCP.fetch()` directly instead of McpAgent's static serve method
+**Evidence**: 
+- Cloudflare reference shows `McpAgent.serveSSE()` and potentially `serveStreamableHttp()`
+- Direct fetch bypasses protocol negotiation
+**Proposed Fix**: 
+```typescript
+// Instead of:
+return RtmMCP.fetch(c.req.raw, c.env, c.executionCtx);
+
+// Use:
+const handler = McpAgent.serveStreamableHttp('/mcp', { binding: 'MCP_OBJECT' });
+return handler.fetch(c.req.raw, c.env, c.executionCtx);
 ```
 
+### Hypothesis 2: Invalid Tool Response Format
+**Issue**: Tools returning `{ type: 'resource' }` instead of `{ type: 'text' }`
+**Evidence**: 
+- MCP spec only supports 'text' content type for tool responses
+- TODO explicitly mentions this as a known issue
+**Proposed Fix**: Update all tool responses to use:
+```typescript
+return {
+  content: [{
+    type: 'text',
+    text: 'Your message here'
+  }]
+};
+```
+
+## 📊 Test Plan
+
+### Step 1: Check Available McpAgent Methods
+```bash
+# Deploy and check health endpoint
+wrangler deploy
+curl https://rtm-mcp-server.vcto-6e7.workers.dev/health | jq .mcp_methods
+```
+
+### Step 2: Verify MCP Route Behavior
+- Check debug logs to see which serve method is used
+- Monitor `/debug` for detailed request handling
+
+### Step 3: Test Tool Responses
+```bash
+# Use Inspector to test each tool
+npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/mcp
+
+# Test sequence:
+1. rtm_authenticate
+2. Complete auth in browser
+3. rtm_check_auth_status
+4. timeline/create
+5. tasks/get
+```
+
+## 📝 Code Changes Implemented
+
+### 1. Enhanced MCP Route (src/index.ts)
+- Added detection for available McpAgent serve methods
+- Implemented fallback chain: serveStreamableHttp → serve → direct fetch
+- Added comprehensive logging for debugging
+
+### 2. Fixed Tool Responses (src/rtm-mcp.ts)
+- Updated rtm_authenticate to return text content
+- Updated rtm_complete_auth to return text content  
+- Updated rtm_check_auth_status to return text content
+- Need to update ALL other tools similarly
+
+### 3. Enhanced Health Check
+- Now reports available McpAgent methods
+- Helps diagnose which serve pattern to use
+
+## 🧪 Expected Outcomes
+
+If hypotheses are correct:
+1. **Health check** will show available serve methods
+2. **Debug logs** will show proper serve method usage
+3. **Inspector** will successfully connect and list tools
+4. **Tools** will execute without "invalid content type" errors
+5. **Auth flow** will complete successfully
+
+## ❌ Dead Ends (Don't Revisit)
+
+1. **SSE Transport** - We use streaming HTTP, not SSE
+2. **Domain mismatch** - Fixed, using rtm-mcp-server everywhere
+3. **Props in McpAgent** - Already fixed, passes auth correctly
+4. **RFC Compliance** - oauth-protected-resource works correctly
+5. **Bearer Token in Inspector** - Not needed with auth tools
+6. **Looking for hardcoded domains** - Everything uses dynamic host header
+
+## 📋 Post-Test Checklist
+
+After testing, record:
+- [ ] Which McpAgent methods are available (from health check)
+- [ ] Which serve method was actually used (from debug logs)
+- [ ] Whether Inspector connected successfully
+- [ ] Which tools worked/failed
+- [ ] Any new error messages
+- [ ] Whether auth flow completed
+
+## 🚀 Next Steps After Testing
+
+Based on results:
+- If serve methods missing → May need to extend McpAgent or use different pattern
+- If tools still fail → Check for other response format issues
+- If auth works → Test with Claude.ai
+- If new errors → Add to learnings and iterate
+
+## END Session Log 2025-07-13
 ## 🎯 Current Status: TypeScript Errors Fixed, Testing MCP Handler
 
 **Last Updated**: 2025-01-18 (Session 2)
