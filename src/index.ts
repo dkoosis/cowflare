@@ -21,7 +21,13 @@ const DEPLOYMENT_TIME = new Date().toISOString();
 
 console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
 
-const app = new Hono<{ Bindings: Env }>();
+// Define context variables type for Hono
+type Variables = {
+  debugLogger: DebugLogger;
+  debugSessionId: string;
+};
+
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply debug logging middleware globally
 app.use('*', withDebugLogging);
@@ -46,7 +52,7 @@ app.route('/', rtmHandler);
 
 // Protected resource metadata endpoint
 app.get('/.well-known/oauth-protected-resource', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('oauth_discovery_resource', {
     endpoint: '/.well-known/oauth-protected-resource'
   });
@@ -61,7 +67,7 @@ app.get('/.well-known/oauth-protected-resource', (c) => {
 
 // Authorization server metadata endpoint
 app.get('/.well-known/oauth-authorization-server', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('oauth_discovery_server', {
     endpoint: '/.well-known/oauth-authorization-server'
   });
@@ -82,7 +88,7 @@ app.get('/.well-known/oauth-authorization-server', (c) => {
 
 // Dynamic client registration endpoint
 app.post('/register', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('client_registration', {
     endpoint: '/register'
   });
@@ -101,11 +107,51 @@ app.post('/register', (c) => {
 
 /**
  * MCP Protocol Handler
- * Uses RtmMCP Durable Object serve method
+ * Uses McpAgent's static serve method for proper protocol handling
  */
-app.all('/mcp', (c) => {
-  // Use the Durable Object's fetch method directly
-  return RtmMCP.fetch(c.req.raw, c.env, c.executionCtx);
+app.all('/mcp', async (c) => {
+  const logger = c.get('debugLogger');
+  logger.log('mcp_request', {
+    endpoint: '/mcp',
+    method: c.req.method,
+    headers: {
+      'mcp-session-id': c.req.header('mcp-session-id'),
+      'content-type': c.req.header('content-type'),
+      'authorization': c.req.header('authorization') ? 'Bearer [REDACTED]' : 'none'
+    }
+  });
+
+  // Check if McpAgent has static serve method
+  if (typeof RtmMCP.serve === 'function') {
+    // Use the static serve method provided by McpAgent
+    const handler = RtmMCP.serve('/mcp', {
+      binding: 'MCP_OBJECT',
+      corsOptions: {
+        origin: '*',
+        methods: 'GET, POST, OPTIONS',
+        headers: 'Content-Type, mcp-session-id, mcp-protocol-version',
+        exposeHeaders: 'mcp-session-id'
+      }
+    });
+    
+    // The serve method returns an object with a fetch method
+    return handler.fetch(c.req.raw, c.env, c.executionCtx);
+  } else {
+    // Fallback: Manual handling if serve method not available
+    const url = new URL(c.req.url);
+    const sessionId = url.searchParams.get('sessionId') || c.req.header('mcp-session-id');
+
+    if (!sessionId) {
+      return c.json({ error: 'Missing sessionId' }, 400);
+    }
+
+    // Get or create Durable Object instance
+    const id = c.env.MCP_OBJECT.idFromName(`streamable-http:${sessionId}`);
+    const stub = c.env.MCP_OBJECT.get(id);
+
+    // Forward the request to the Durable Object
+    return stub.fetch(c.req.raw);
+  }
 });
 
 /**

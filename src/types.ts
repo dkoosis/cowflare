@@ -4,26 +4,24 @@
  */
 
 // Environment configuration
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-
 export interface Env {
   // Environment Variables
   RTM_API_KEY: string;
   RTM_SHARED_SECRET: string;
-  SERVER_URL: string;  // ← ADD THIS
+  SERVER_URL: string;
   
   // KV Namespaces  
   AUTH_STORE: KVNamespace;
-  OAUTH_DATABASE: KVNamespace;     // ← ADD THIS
-  OAUTH_SESSIONS: KVNamespace;     // ← ADD THIS
-  OAUTH_KV: KVNamespace;           // ← ADD THIS
+  OAUTH_DATABASE: KVNamespace;
+  OAUTH_SESSIONS: KVNamespace;
+  OAUTH_KV: KVNamespace;
   
   // Durable Objects
   RTM_MCP: DurableObjectNamespace;
-  MCP_OBJECT: DurableObjectNamespace;  // ← ADD THIS
+  MCP_OBJECT: DurableObjectNamespace;
   
-  // OAuth Configuration
-  OAUTH_PROVIDER: OAuthHelpers;
+  // Cookie encryption for OAuth sessions
+  COOKIE_ENCRYPTION_KEY?: string;
 }
 
 // RTM API Types
@@ -154,88 +152,39 @@ export interface MetricEvent {
   success?: boolean;
   error?: string;
   metadata?: Record<string, any>;
-  timestamp: number;
-}
-
-// Logger Types
-export interface LogEntry {
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  timestamp: string;
-  metadata?: Record<string, any>;
-}
-
-// Simple Logger implementation
-export interface Logger {
-  debug(message: string, metadata?: Record<string, any>): void;
-  info(message: string, metadata?: Record<string, any>): void;
-  warn(message: string, metadata?: Record<string, any>): void;
-  error(message: string, metadata?: Record<string, any>): void;
-}
-
-// Simple Metrics Collector implementation
-export interface MetricsCollector {
-  trackEvent(event: MetricEvent): void;
-  getMetrics(): MetricEvent[];
-}
-
-// Tool Types
-export interface ToolContext {
-  env: Env;
-  metrics: MetricsCollector;
-  logger: Logger;
-  requestId: string;
 }
 
 // Error Types
-export class RTMError extends Error {
-  constructor(
-    message: string,
-    public code?: string,
-    public details?: any
-  ) {
-    super(message);
-    this.name = 'RTMError';
-  }
+export interface RTMError {
+  code: string;
+  msg: string;
 }
 
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public field?: string,
-    public value?: any
-  ) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-export class AuthenticationError extends Error {
-  constructor(
-    message: string,
-    public requiresReauth: boolean = false
-  ) {
-    super(message);
-    this.name = 'AuthenticationError';
-  }
-}
-// Add these interfaces to src/types.ts
-
-export interface HttpData {
-  headers: Record<string, string>;
-  body?: string;
+export interface RTMResponse<T> {
+  rsp: {
+    stat: 'ok' | 'fail';
+    err?: RTMError;
+  } & T;
 }
 
-export interface McpTransaction {
-  transactionId: string;
+// OAuth Types (for MCP OAuth flow)
+export interface OAuthState {
   sessionId: string;
   timestamp: number;
-  durationMs: number;
-  request: {
-    method: string;
-    url: string;
-  } & HttpData;
-  response: {
-    statusCode: number;
-    statusText: string;
-  } & HttpData;
+  redirectUri?: string;
+}
+
+export interface StoredToken {
+  token: string;
+  userId: string;
+  userName: string;
+  createdAt: number;
+  expiresAt?: number;
+}
+
+// Worker-specific types
+export interface WorkerContext {
+  env: Env;
+  ctx: ExecutionContext;
+  sessionId?: string;
 }
