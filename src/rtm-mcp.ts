@@ -63,6 +63,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
    // by the McpAgent base class. Our custom implementation is necessary to
    // accommodate Remember The Milk's non-standard, "desktop-style" auth flow
    // and correctly direct the client to our custom /authorize endpoint.
+   /* test dk
   this.server.tool(
       'rtm_authenticate',
       'Initiate authentication with Remember The Milk',
@@ -85,6 +86,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
         };
       }
     );
+    */
     // Timeline creation tool
     this.server.tool(
       'timeline/create',

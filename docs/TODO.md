@@ -1,226 +1,183 @@
 # TODO - RTM MCP Integration Debug Log
 
-## 🎯 Current Status: Domain Mismatch Identified
+## 🎯 Current Status: Understanding McpAgent Architecture
 
-**Last Updated**: 2025-01-12  
-**Next Action**: Change SERVER_URL to "cowflare" and redeploy
+**Last Updated**: 2025-01-18  
+**Domain**: rtm-mcp-server.vcto-6e7.workers.dev (standardized)  
+**Next Action**: Check if we're using McpAgent.serve() correctly
 
-## 🚀 Immediate Next Steps
+## 🧠 Key Learnings (DO NOT LOSE THESE)
 
-```bash
-# 1. Update wrangler.toml
-SERVER_URL = "https://cowflare.vcto-6e7.workers.dev"
+### Understanding the Bug
+1. **McpAgent expects standard OAuth** - Built for modern OAuth2 providers with dynamic client registration
+2. **RTM uses legacy desktop flow** - Incompatible with McpAgent's assumptions
+3. **Default auth sends invalid response** - `{ "type": "resource" }` when OAuth discovery expected
+4. **Custom rtm_authenticate tool is CORRECT** - This bypasses the broken default flow
 
-# 2. Deploy
-wrangler deploy
-
-# 3. Test in Inspector
-npx @modelcontextprotocol/inspector https://cowflare.vcto-6e7.workers.dev/mcp
-```
+### McpAgent Architecture (from Cloudflare source analysis)
+1. **Props Flow**:
+   - Props passed during OAuth completion
+   - Stored in DO storage by `_init()`
+   - Loaded from storage during `onStart()`
+   - Available in `init()` method via `this.props`
+   
+2. **Transport Types**:
+   - Stored in DO storage as "sse" or "streamable-http"
+   - We need "streamable-http" for MCP compliance
+   
+3. **Static serve() Method**:
+   - McpAgent provides a static `serve()` method
+   - This handles protocol negotiation and DO creation
+   - Critical for proper MCP handling
 
 ## ✅ What's Proven to Work
 
-1. **OAuth Flow** - Completes successfully (when domains match)
+1. **OAuth Flow** - Completes successfully
 2. **Token Storage** - KV storage works correctly
 3. **MCP Protocol** - Basic connection works (Inspector confirmed)
 4. **Streaming HTTP** - Correct transport (not SSE)
 5. **Discovery Endpoints** - Return correct MCP info
+6. **Custom rtm_authenticate tool** - Correctly bypasses default auth
 
 ## ❌ Dead Ends (Don't Revisit)
 
 1. **SSE Transport** - We use streaming HTTP, not SSE
-2. **Props in McpAgent** - Already fixed, passes auth correctly
-3. **RFC Compliance** - oauth-protected-resource works correctly
-4. **Looking for hardcoded "cowflare"** - It's dynamic from host header
+2. **Domain mismatch** - Fixed, using rtm-mcp-server everywhere
+3. **Props in McpAgent** - Already fixed, passes auth correctly
+4. **RFC Compliance** - oauth-protected-resource works correctly
 5. **Bearer Token in Inspector** - Not needed with auth tools
+6. **Looking for hardcoded domains** - Everything uses dynamic host header
 
-## 🔍 Key Discoveries
+## 🔍 Current Issues to Fix
 
-### Inspector Testing (2025-01-12)
-- ✅ Connected successfully with streaming HTTP
-- ✅ Listed RTM auth tools
-- ❌ Tool responses use non-compliant "resource" type (should be "text")
-- ❌ Domain mismatch: Inspector→cowflare but SERVER_URL→rtm-mcp-server
-- 💡 Solution: Align SERVER_URL with Inspector's connection
-
-### Debug Logs Analysis
-- Multiple failed token exchanges from Claude
-- All fail at: `token_exchange_start` → Never completes
-- Pattern: Claude can't exchange auth code for token
-- Root cause: Domain mismatch in redirect URLs
-
-## 📊 Systematic Test Plan
-
-### Phase 1: Fix Domain Mismatch ← WE ARE HERE
-1. [ ] Change SERVER_URL to cowflare.vcto-6e7.workers.dev
-2. [ ] Deploy with wrangler
-3. [ ] Test OAuth in Inspector
-4. [ ] Document results
-
-### Phase 2: Validate OAuth Flow (After Domain Fix)
-```bash
-# Manual test sequence
-1. Start auth: Click rtm_authenticate in Inspector
-2. Copy auth URL from response (ignore validation error)
-3. Authorize in RTM
-4. Run rtm_complete_auth tool
-5. Test rtm_check_auth_status
-6. Try actual tool: rtm_get_lists
-```
-
-**Enhanced Logging** (if needed):
+### Issue 1: McpAgent.serve() Usage ← CHECK THIS FIRST
 ```typescript
-// In /authorize endpoint
-await logger.log('oauth_authorize_params_detailed', {
-  all_params: c.req.query(),
-  has_resource: !!resource,
-  resource_value: resource,
-  expected_resource: `https://${c.req.header('host')}/mcp`,
+// Current (might be wrong):
+app.all('/mcp', async (c) => {
+  // ... manual handler
 });
+
+// Should be (based on cf_index.ts):
+app.all('/mcp', (c) => McpAgent.serve(RtmMCP, c.req.raw, c.env, c.executionCtx));
 ```
 
-### Phase 3: Fix Tool Response Format (If OAuth Works)
-Change tool responses from:
+### Issue 2: Tool Response Format
 ```typescript
-{ type: "resource", resource: {...} }  // Invalid
-```
-To:
-```typescript
-{ type: "text", text: "Message here" }  // Valid
+// Current (invalid):
+return {
+  content: [{
+    type: 'resource',  // ❌ Invalid
+    resource: {...}
+  }]
+};
+
+// Should be:
+return {
+  content: [{
+    type: 'text',  // ✅ Valid
+    text: 'Message here'
+  }]
+};
 ```
 
-### Phase 4: Test with Claude (If Inspector Works)
-1. Remove MCP connection in Claude
-2. Re-add with cowflare URL
-3. Monitor debug logs during connection
-4. Check for any Claude-specific behaviors
+### Issue 3: Transport Type Setting
+- Verify transport type is set to "streamable-http" in DO storage
+- Check if it's being set during initialization
+
+## 📊 Incremental Test Plan
+
+### Step 1: Verify McpAgent.serve() Implementation
+```bash
+# Check if McpAgent has static serve method
+grep -n "serve" src/index.ts
+
+# If missing, this is likely our main issue
+```
+
+### Step 2: Fix serve() If Needed
+- Update `/mcp` route to use `McpAgent.serve()`
+- This handles all the protocol negotiation we're doing manually
+
+### Step 3: Test Basic Connection
+```bash
+# Deploy changes
+wrangler deploy
+
+# Test with Inspector
+npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/mcp
+
+# Should see:
+# - Connection established
+# - Tools listed (including rtm_authenticate)
+```
+
+### Step 4: Fix Tool Response Format
+- Update all tool responses to use `type: "text"`
+- Test each tool individually in Inspector
+
+### Step 5: Test Complete Auth Flow
+1. Use `rtm_authenticate` tool
+2. Complete RTM authorization
+3. Use `rtm_complete_auth` tool
+4. Verify with `rtm_check_auth_status`
+5. Test actual RTM tools
+
+## 📝 Code Locations Reference
+
+- **OAuth Handler**: `src/rtm-handler.ts`
+- **MCP Tools**: `src/rtm-mcp.ts` 
+- **Tool Response Format**: In each tool's return statement
+- **Main Route**: `src/index.ts` - `/mcp` handler
+- **Props Access**: Available in `init()` via `this.props`
 
 ## 🐛 Debug Decision Tree
 
 ```
-Inspector connects? 
-├─ NO → Check URL, transport type
-└─ YES → OAuth works?
-         ├─ NO → Check domain match, auth URL generation
+McpAgent.serve() being used?
+├─ NO → Fix this first (likely the main issue)
+└─ YES → Connection works?
+         ├─ NO → Check transport type in DO storage
          └─ YES → Tools work?
-                  ├─ NO → Fix response format
+                  ├─ NO → Fix response format (type: "text")
                   └─ YES → Test with Claude
                            ├─ Works → 🎉 Done!
-                           └─ Fails → Claude-specific issue
+                           └─ Fails → Check Claude-specific headers
 ```
 
-## 📝 Code Locations for Quick Reference
+## 🔧 Session Continuity Checklist
 
-- **OAuth Handler**: `src/rtm-handler.ts`
-- **MCP Tools**: `src/rtm-mcp.ts`
-- **Auth URL Generation**: Uses `c.req.header('host')` dynamically
-- **Tool Response Format**: In `processRequest()` method
+### When Starting a Session:
+- [ ] Read this entire TODO first
+- [ ] Check current deployment: `wrangler deployments list`
+- [ ] Note which step you're on
+- [ ] Don't repeat dead ends
 
-## 🚫 Common Pitfalls to Avoid
+### Before Making Changes:
+- [ ] Understand WHY (check Key Learnings)
+- [ ] Make ONE change at a time
+- [ ] Test incrementally
 
-1. Don't change Inspector config URLs - they're correct
-2. Don't search for hardcoded "cowflare" - it's dynamic
-3. Don't debug token exchange before fixing domain mismatch
-4. Don't modify working OAuth flow logic
-5. Don't skip Inspector testing before Claude testing
-
-## 📋 Session Checklist
-
-### Start of Session:
-- [ ] Check this "Immediate Next Steps" section
-- [ ] Note which phase you're in
-- [ ] Pull latest: `git pull`
-
-### During Testing:
-- [ ] Follow the phase plan sequentially
-- [ ] Test with Inspector before Claude
-- [ ] Check debug logs after each test
-- [ ] Document any new errors
+### When Debugging:
+- [ ] Check debug logs: https://rtm-mcp-server.vcto-6e7.workers.dev/debug
+- [ ] Use Inspector before Claude
+- [ ] Save any new error messages here
 
 ### End of Session:
-- [ ] Update current phase status
-- [ ] Add any new discoveries
-- [ ] Commit: `git add docs/TODO.md && git commit -m "Session: [what you learned]"`
+- [ ] Update this TODO with findings
+- [ ] Document any new dead ends
+- [ ] Update "Last Updated" date
+- [ ] Commit changes
 
-## 🎯 Success Criteria
+## 🚀 Future Improvements (After MCP Works)
 
-1. Inspector can complete OAuth flow
-2. Inspector can execute RTM tools
-3. Claude can connect and authenticate
-4. Claude can use RTM tools
+- Enhanced health check with environment details
+- Time formatting in debug logs
+- Architecture refactoring (see original TODO)
 
-## 🔗 Resources
+## 📚 References
 
-- **Live Server**: https://cowflare.vcto-6e7.workers.dev
-- **Debug Dashboard**: https://cowflare.vcto-6e7.workers.dev/debug
-- **Health Check**: https://cowflare.vcto-6e7.workers.dev/health
+- **Live Server**: https://rtm-mcp-server.vcto-6e7.workers.dev
+- **Debug Dashboard**: https://rtm-mcp-server.vcto-6e7.workers.dev/debug
+- **Health Check**: https://rtm-mcp-server.vcto-6e7.workers.dev/health
 - **Inspector**: `npx @modelcontextprotocol/inspector`
-
-## 🔧 Future Improvements (After MCP Works)
-
-### Enhanced Health Check
-```typescript
-app.get('/health', (c) => {
-  return c.json({ 
-    status: 'ok',
-    service: 'rtm-mcp-server',
-    version: '2.5.0',
-    transport: 'streamable-http',
-    mcp_compliant: true,
-    deployed_at: new Date().toISOString(),
-    has_resource_fix: true,
-    environment: {
-      has_server_url: !!c.env.SERVER_URL,
-      has_rtm_key: !!c.env.RTM_API_KEY,
-      kv_namespaces: ['AUTH_STORE', 'OAUTH_DATABASE']
-    }
-  });
-});
-```
-
-### Debug Log Time Formatting
-- Show timestamps in local time for easier debugging
-- Add elapsed time between events
-
-## 📐 Code Architecture Refactoring (Post-Debug)
-
-**⚠️ PREREQUISITE**: Complete MCP streaming debug first. Do not refactor during active debugging.
-
-### P0: Critical - God Module Decomposition
-**Problem**: `src/index.ts` violates Single Responsibility Principle
-
-**Solution Structure**:
-```
-src/
-├── server/
-│   └── router.ts        # HTTP routing only
-├── mcp/
-│   ├── handler.ts       # MCP protocol logic
-│   └── tools/           # Individual tool implementations
-├── rtm/
-│   ├── api.ts          # RTM API client
-│   └── service.ts      # Business logic layer
-└── shared/
-    ├── types.ts        # Shared types
-    └── auth.ts         # Auth middleware
-```
-
-### P1: High - Fix Change Preventers
-- Consolidate all RTM API calls to use base method
-- Move business logic from handlers to service layer
-- Single source of truth for each operation
-
-### P2: Medium - Type Safety
-- Add branded types for IDs (FrobId, TaskId, etc.)
-- Replace long switch with command pattern
-- Enforce compile-time type checking
-
-### Success Metrics
-- [ ] Each file has single responsibility
-- [ ] RTM changes only touch `src/rtm/`
-- [ ] New MCP tools don't touch server code
-- [ ] Can add Spektrix without touching RTM
-
----
-
-**Remember**: We're currently at Phase 1 - fixing the domain mismatch. Don't skip ahead!
+- **Cloudflare MCP Docs**: https://developers.cloudflare.com/agents/model-context-protocol/
