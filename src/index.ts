@@ -9,6 +9,13 @@ import type { Env } from './types';
 const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
 const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
 
+
+// Extend context type to include debugLogger
+type Variables = {
+  debugLogger: DebugLogger;
+  debugSessionId: string;
+};
+
 const generateDeploymentName = () => {
   const now = Date.now();
   const adjIndex = Math.floor((now / 1000) % adjectives.length);
@@ -21,7 +28,7 @@ const DEPLOYMENT_TIME = new Date().toISOString();
 
 console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply debug logging middleware globally
 app.use('*', withDebugLogging);
@@ -46,7 +53,7 @@ app.route('/', rtmHandler);
 
 // Protected resource metadata endpoint
 app.get('/.well-known/oauth-protected-resource', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('oauth_discovery_resource', {
     endpoint: '/.well-known/oauth-protected-resource'
   });
@@ -61,7 +68,7 @@ app.get('/.well-known/oauth-protected-resource', (c) => {
 
 // Authorization server metadata endpoint
 app.get('/.well-known/oauth-authorization-server', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('oauth_discovery_server', {
     endpoint: '/.well-known/oauth-authorization-server'
   });
@@ -82,7 +89,7 @@ app.get('/.well-known/oauth-authorization-server', (c) => {
 
 // Dynamic client registration endpoint
 app.post('/register', (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   logger.log('client_registration', {
     endpoint: '/register'
   });
@@ -104,7 +111,7 @@ app.post('/register', (c) => {
  * Fixed to use proper McpAgent serve pattern for streamable HTTP
  */
 app.all('/mcp/*', async (c) => {
-  const logger = c.get('debugLogger') as DebugLogger;
+  const logger = c.get('debugLogger');
   
   logger.log('mcp_request', {
     method: c.req.method,
