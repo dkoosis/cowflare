@@ -22,7 +22,6 @@
 │   ├── TODO.md
 │   └── tree.txt
 ├── inspector-config.json
-├── mcp-debug.js
 ├── out.txt
 ├── package.json
 ├── README.md
@@ -49,4 +48,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 44 files
+6 directories, 43 files
