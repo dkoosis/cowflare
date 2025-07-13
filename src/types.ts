@@ -87,10 +87,19 @@ export interface RTMNote {
   title?: string;
   $t: string; // Note content
 }
-
 export interface RTMTransaction {
+  // Existing properties
   id: string;
   undoable: '0' | '1';
+  sessionId: string;
+  timestamp: number;
+  transactionId: string;
+  request: {
+    method: string;
+    params: Record<string, any>;
+  };
+  response?: Record<string, any>;
+  error?: string;
 }
 
 export interface RTMTimeline {

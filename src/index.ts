@@ -1,3 +1,4 @@
+// File: src/index.ts
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { RtmMCP } from './rtm-mcp';
@@ -196,7 +197,7 @@ app.all('/mcp/*', async (c) => {
 // Debug dashboard
 app.get('/debug', async (c) => {
   const { createDebugDashboard } = await import('./debug-logger');
-  return createDebugDashboard(DEPLOYMENT_NAME, new Date().toISOString())(c);
+ return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME_MODULE)(c);
 });
 
 // Health check endpoint

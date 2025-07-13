@@ -1,3 +1,6 @@
+// File: src/rtm-api.ts
+import type { RTMResponse, RTMTask, RTMTaskSeries } from './types';
+
 export class RtmApi {
   private apiKey: string;
   private sharedSecret: string;
@@ -21,7 +24,6 @@ export class RtmApi {
     
     console.log('[RtmApi] Signature message length:', message.length);
     
-    // Use Web Crypto API for Cloudflare Workers
     const encoder = new TextEncoder();
     const data = encoder.encode(message);
     const hashBuffer = await crypto.subtle.digest('MD5', data);
@@ -32,7 +34,7 @@ export class RtmApi {
     return signature;
   }
 
-  async makeRequest(method: string, params: Record<string, string> = {}): Promise<any> {
+  async makeRequest<T = any>(method: string, params: Record<string, string> = {}): Promise<T> {
     console.log('[RtmApi] makeRequest called:', {
       method,
       params: Object.keys(params).reduce((acc, key) => {
@@ -41,7 +43,7 @@ export class RtmApi {
       }, {} as Record<string, string>)
     });
     
-    const allParams = {
+    const allParams: Record<string, string> = {
       ...params,
       api_key: this.apiKey,
       method,
@@ -59,7 +61,7 @@ export class RtmApi {
 
     try {
       const response = await fetch(url.toString());
-      const data = await response.json();
+      const data = (await response.json()) as RTMResponse<T>;
 
       console.log('[RtmApi] Response status:', response.status);
       console.log('[RtmApi] Response data:', {
@@ -70,7 +72,7 @@ export class RtmApi {
 
       if (data.rsp.stat !== 'ok') {
         console.error('[RtmApi] RTM API Error:', data.rsp.err);
-        throw new Error(`RTM API Error: ${data.rsp.err.msg} (${data.rsp.err.code})`);
+        throw new Error(`RTM API Error: ${data.rsp.err?.msg} (${data.rsp.err?.code})`);
       }
 
       return data.rsp;
@@ -82,7 +84,7 @@ export class RtmApi {
 
   async getFrob(): Promise<string> {
     console.log('[RtmApi] getFrob called');
-    const response = await this.makeRequest('rtm.auth.getFrob');
+    const response = await this.makeRequest<{ frob: string }>('rtm.auth.getFrob');
     console.log('[RtmApi] getFrob response:', { frob: response.frob });
     return response.frob;
   }
@@ -111,7 +113,7 @@ export class RtmApi {
 
   async getToken(frob: string): Promise<string> {
     console.log('[RtmApi] getToken called with frob');
-    const response = await this.makeRequest('rtm.auth.getToken', { frob });
+    const response = await this.makeRequest<{ auth: { token: string, user: any } }>('rtm.auth.getToken', { frob });
     console.log('[RtmApi] getToken response:', {
       hasToken: !!response.auth?.token,
       user: response.auth?.user
@@ -121,7 +123,7 @@ export class RtmApi {
 
   async createTimeline(authToken: string): Promise<string> {
     console.log('[RtmApi] createTimeline called');
-    const response = await this.makeRequest('rtm.timelines.create', {
+    const response = await this.makeRequest<{ timeline: string }>('rtm.timelines.create', {
       auth_token: authToken
     });
     console.log('[RtmApi] createTimeline response:', { timeline: response.timeline });
@@ -156,16 +158,16 @@ export class RtmApi {
     const tasks: string[] = [];
     let totalTasks = 0;
     
-    listArray.forEach(list => {
+    listArray.forEach((list: { id: string, taskseries?: RTMTaskSeries | RTMTaskSeries[] }) => {
       if (list.taskseries) {
         const seriesArray = Array.isArray(list.taskseries) ? list.taskseries : [list.taskseries];
         
-        seriesArray.forEach(series => {
+        seriesArray.forEach((series: RTMTaskSeries) => {
           const taskArray = Array.isArray(series.task) ? series.task : [series.task];
           
-          taskArray.forEach(task => {
+          taskArray.forEach((task: RTMTask) => {
             totalTasks++;
-            const completed = task.completed !== '';
+            const completed = task.completed !== undefined && task.completed !== '';
             const priority = task.priority === 'N' ? '' : ` [P${task.priority}]`;
             const due = task.due ? ` (Due: ${task.due})` : '';
             const status = completed ? ' ✓' : '';

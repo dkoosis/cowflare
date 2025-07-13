@@ -1,6 +1,6 @@
 // File: src/protocol-logger.ts
 
-import type { Env, McpTransaction } from './types';
+import type { Env, RTMTransaction } from './types';
 
 export class ProtocolLogger {
   private env: Env;
@@ -11,8 +11,8 @@ export class ProtocolLogger {
     this.sessionId = sessionId;
   }
 
-  async logTransaction(tx: Omit<McpTransaction, 'sessionId'>) {
-    const transaction: McpTransaction = {
+  async logTransaction(tx: Omit<RTMTransaction, 'sessionId'>) {
+    const transaction: RTMTransaction = {
       ...tx,
       sessionId: this.sessionId,
     };
@@ -22,9 +22,9 @@ export class ProtocolLogger {
     });
   }
 
-  static async getSessionTransactions(env: Env, sessionId: string): Promise<McpTransaction[]> {
+  static async getSessionTransactions(env: Env, sessionId: string): Promise<RTMTransaction[]> {
     const list = await env.AUTH_STORE.list({ prefix: `protocol:${sessionId}` });
-    const transactions: McpTransaction[] = [];
+    const transactions: RTMTransaction[] = [];
     for (const key of list.keys) {
       const data = await env.AUTH_STORE.get(key.name);
       if (data) {
