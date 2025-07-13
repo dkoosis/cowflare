@@ -15,7 +15,8 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   private userId?: string;
   
   server = new McpServer({
-    name: 'remember-the-milk',
+    //    name: 'remember-the-milk',
+    name: 'spooky',
     version: '1.0.0',
   });
 
@@ -59,6 +60,12 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   }
 
   private registerTools() {
+  console.log('[RtmMCP] Tools at start of registerTools:', {
+    tools: this.server.getTools(),
+    server: this.server,
+    serverKeys: Object.keys(this.server),
+    serverProto: Object.getOwnPropertyNames(Object.getPrototypeOf(this.server))
+  });
    // This tool intentionally overrides the default authentication tool provided
    // by the McpAgent base class. Our custom implementation is necessary to
    // accommodate Remember The Milk's non-standard, "desktop-style" auth flow
