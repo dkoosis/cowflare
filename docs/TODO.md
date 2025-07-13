@@ -1,10 +1,45 @@
 # TODO - RTM MCP Integration Debug Log
 
-## 🎯 Current Status: Understanding McpAgent Architecture
+## 🚨 CRITICAL: Always commit before deploy!
+```bash
+git add -A && git commit -m "description" && wrangler deploy
+```
 
-**Last Updated**: 2025-01-18  
+## 🎯 Current Status: TypeScript Errors Fixed, Testing MCP Handler
+
+**Last Updated**: 2025-01-18 (Session 2)
 **Domain**: rtm-mcp-server.vcto-6e7.workers.dev (standardized)  
-**Next Action**: Check if we're using McpAgent.serve() correctly
+**Next Action**: Deploy fixed code and test McpAgent.serve() implementation
+
+## 🔥 Latest Session Progress (2025-01-18)
+
+### ✅ Fixed TypeScript Errors
+1. **index.ts Context Typing**:
+   ```typescript
+   type Variables = {
+     debugLogger: DebugLogger;
+     debugSessionId: string;
+   };
+   const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+   ```
+
+2. **MCP Handler Fix**:
+   ```typescript
+   const handler = RtmMCP.serve('/mcp', { /* options */ });
+   return handler.fetch(c.req.raw, c.env, c.executionCtx);
+   ```
+
+3. **types.ts Import Fix**:
+   - Removed non-existent `@cloudflare/workers-oauth-provider` import
+   - Added proper Env interface fields matching worker-configuration.d.ts
+
+4. **Deployment Info Persistence**:
+   - Using single `DEPLOYMENT_INFO` object instead of separate constants
+   - Should now show proper deployment name/time in health endpoint
+
+### ⚠️ Important Discovery
+**Build name wasn't showing because changes weren't committed before deployment!**
+Always: `git add -A && git commit -m "message" && wrangler deploy`
 
 ## 🧠 Key Learnings (DO NOT LOSE THESE)
 
@@ -50,23 +85,19 @@
 
 ## 🔍 Current Issues to Fix
 
-### Issue 1: McpAgent.serve() Usage ← CHECK THIS FIRST
+### Issue 1: Verify McpAgent.serve() is Working ✅ FIXED
 ```typescript
-// Current (might be wrong):
-app.all('/mcp', async (c) => {
-  // ... manual handler
-});
-
-// Should be (based on cf_index.ts):
-app.all('/mcp', (c) => McpAgent.serve(RtmMCP, c.req.raw, c.env, c.executionCtx));
+// Now correctly implemented as:
+const handler = RtmMCP.serve('/mcp', { binding: 'MCP_OBJECT', corsOptions: {...} });
+return handler.fetch(c.req.raw, c.env, c.executionCtx);
 ```
 
-### Issue 2: Tool Response Format
+### Issue 2: Tool Response Format 🔴 STILL TO CHECK
 ```typescript
-// Current (invalid):
+// Current (might be invalid):
 return {
   content: [{
-    type: 'resource',  // ❌ Invalid
+    type: 'resource',  // ❌ Invalid?
     resource: {...}
   }]
 };
@@ -80,47 +111,52 @@ return {
 };
 ```
 
-### Issue 3: Transport Type Setting
-- Verify transport type is set to "streamable-http" in DO storage
-- Check if it's being set during initialization
+### Issue 3: Test Deployment Info 🟡 NEEDS VERIFICATION
+- Check if deployment name/time shows properly after deploying committed changes
+- Health endpoint should show actual time instead of 1970-01-01
+- Debug dashboard should show green deployment banner
 
-## 📊 Incremental Test Plan
+## 📊 Next Session Test Plan
 
-### Step 1: Verify McpAgent.serve() Implementation
+### Step 1: Deploy Fixed Code
 ```bash
-# Check if McpAgent has static serve method
-grep -n "serve" src/index.ts
-
-# If missing, this is likely our main issue
+# Make sure all changes are committed
+git add -A
+git commit -m "Fix TypeScript errors and deployment info"
+wrangler deploy
 ```
 
-### Step 2: Fix serve() If Needed
-- Update `/mcp` route to use `McpAgent.serve()`
-- This handles all the protocol negotiation we're doing manually
-
-### Step 3: Test Basic Connection
+### Step 2: Verify Deployment Info
 ```bash
-# Deploy changes
-wrangler deploy
+# Check health endpoint
+curl https://rtm-mcp-server.vcto-6e7.workers.dev/health | jq .
 
+# Should see actual deployment_name and deployed_at (not 1970)
+# Check debug dashboard for green banner
+```
+
+### Step 3: Test Basic MCP Connection
+```bash
 # Test with Inspector
 npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/mcp
 
 # Should see:
 # - Connection established
 # - Tools listed (including rtm_authenticate)
+# - No errors about serve() method
 ```
 
-### Step 4: Fix Tool Response Format
-- Update all tool responses to use `type: "text"`
-- Test each tool individually in Inspector
+### Step 4: Check Tool Response Format
+- Look in rtm-mcp.ts for all tool returns
+- If using `type: 'resource'`, change to `type: 'text'`
+- Test each tool in Inspector
 
 ### Step 5: Test Complete Auth Flow
-1. Use `rtm_authenticate` tool
-2. Complete RTM authorization
-3. Use `rtm_complete_auth` tool
+1. Use `rtm_authenticate` tool in Inspector
+2. Complete RTM authorization in browser
+3. Use `rtm_complete_auth` tool with session ID
 4. Verify with `rtm_check_auth_status`
-5. Test actual RTM tools
+5. Test actual RTM tools (get tasks, add task)
 
 ## 📝 Code Locations Reference
 
@@ -134,9 +170,8 @@ npx @modelcontextprotocol/inspector https://rtm-mcp-server.vcto-6e7.workers.dev/
 
 ```
 McpAgent.serve() being used?
-├─ NO → Fix this first (likely the main issue)
-└─ YES → Connection works?
-         ├─ NO → Check transport type in DO storage
+├─ YES ✅ → Connection works?
+         ├─ NO → Check debug logs for errors
          └─ YES → Tools work?
                   ├─ NO → Fix response format (type: "text")
                   └─ YES → Test with Claude
@@ -181,3 +216,19 @@ McpAgent.serve() being used?
 - **Health Check**: https://rtm-mcp-server.vcto-6e7.workers.dev/health
 - **Inspector**: `npx @modelcontextprotocol/inspector`
 - **Cloudflare MCP Docs**: https://developers.cloudflare.com/agents/model-context-protocol/
+
+## 📝 Files Changed This Session (2025-01-18)
+
+1. **src/index.ts**:
+   - Added proper Hono Variables typing
+   - Fixed MCP handler to use serve().fetch()
+   - Changed to DEPLOYMENT_INFO object for persistence
+
+2. **src/types.ts**:
+   - Removed @cloudflare/workers-oauth-provider import
+   - Cleaned up Env interface to match worker-configuration.d.ts
+
+3. **docs/TODO.md**:
+   - Updated with session progress
+   - Marked McpAgent.serve() as fixed
+   - Added deployment troubleshooting notes

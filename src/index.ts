@@ -16,10 +16,14 @@ const generateDeploymentName = () => {
   return `${adjectives[adjIndex]}-${animals[animalIndex]}`;
 };
 
-const DEPLOYMENT_NAME = generateDeploymentName();
-const DEPLOYMENT_TIME = new Date().toISOString();
+// Store deployment info in a way that persists across requests
+const DEPLOYMENT_INFO = {
+  name: generateDeploymentName(),
+  time: new Date().toISOString(),
+  timestamp: Date.now()
+};
 
-console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
+console.log(`🚀 Deployment: ${DEPLOYMENT_INFO.name} at ${DEPLOYMENT_INFO.time}`);
 
 // Define context variables type for Hono
 type Variables = {
@@ -161,7 +165,7 @@ app.all('/mcp', async (c) => {
 // Debug dashboard
 app.get('/debug', async (c) => {
   const { createDebugDashboard } = await import('./debug-logger');
-  return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME)(c);
+  return createDebugDashboard(DEPLOYMENT_INFO.name, DEPLOYMENT_INFO.time)(c);
 });
 
 // Health check endpoint
@@ -170,10 +174,10 @@ app.get('/health', (c) => {
     status: 'ok',
     service: 'rtm-mcp-server',
     version: '2.5.0',
-    deployment_name: DEPLOYMENT_NAME,
+    deployment_name: DEPLOYMENT_INFO.name,
     transport: 'streamable-http',
     mcp_compliant: true,
-    deployed_at: DEPLOYMENT_TIME,
+    deployed_at: DEPLOYMENT_INFO.time,
     has_serve_method: typeof RtmMCP.serve === 'function'
   });
 });
