@@ -10,8 +10,11 @@
 │   ├── adr-platform-dependencies.md
 │   ├── adr-platform-typescript.md
 │   ├── adr-practices-telemetry.md
+│   ├── cf_ag.ts
 │   ├── reference
+│   │   ├── cf_index.ts
 │   │   ├── cloudflare_agent.ts
+│   │   ├── do_auth.ts
 │   │   ├── llms-full.txt
 │   │   ├── schema.ts
 │   │   └── ts-sdk.md
@@ -46,4 +49,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 41 files
+6 directories, 44 files

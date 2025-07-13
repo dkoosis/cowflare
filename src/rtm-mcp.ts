@@ -59,6 +59,32 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   }
 
   private registerTools() {
+   // This tool intentionally overrides the default authentication tool provided
+   // by the McpAgent base class. Our custom implementation is necessary to
+   // accommodate Remember The Milk's non-standard, "desktop-style" auth flow
+   // and correctly direct the client to our custom /authorize endpoint.
+  this.server.tool(
+      'rtm_authenticate',
+      'Initiate authentication with Remember The Milk',
+      z.object({}), // No input arguments are needed
+      async () => {
+        console.log('[RtmMCP] Tool called: rtm_authenticate (override)');
+        
+        // The base URL of your worker. this.props.host should be available
+        // during the MCP handshake.
+        const baseUrl = this.env.SERVER_URL || `https://${this.props.host}`;
+        
+        // The URL to your custom OAuth handler
+        const authUrl = `${baseUrl}/authorize`;
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Please begin the authentication process by visiting: ${authUrl}`
+          }]
+        };
+      }
+    );
     // Timeline creation tool
     this.server.tool(
       'timeline/create',
