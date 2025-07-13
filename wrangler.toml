@@ -1,6 +1,6 @@
 name = "rtm-mcp-server"
 main = "src/index.ts"
-compatibility_date = "2025-03-10"
+compatibility_date = "2025-03-11"
 compatibility_flags = ["nodejs_compat"]
 
 # Production configuration is now the default
