@@ -320,6 +320,7 @@ export function createDebugDashboard() {
     const formatTime = (timestamp: number) => {
       const date = new Date(timestamp);
       return date.toLocaleString('en-US', {
+        timeZone: 'America/New_York', // Eastern Time
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
