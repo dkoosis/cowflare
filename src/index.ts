@@ -26,7 +26,7 @@ const generateDeploymentName = () => {
 const DEPLOYMENT_NAME = generateDeploymentName();
 const DEPLOYMENT_TIME_MODULE = new Date().toISOString(); // Will be epoch, but we'll fix in handlers
 
-console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME}`);
+console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME_MODULE}`);
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
