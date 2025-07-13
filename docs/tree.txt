@@ -18,13 +18,11 @@
 │   ├── rtm-mcp-debug-logs.json
 │   ├── TODO.md
 │   └── tree.txt
-├── har_cleaner.py
 ├── inspector-config.json
 ├── mcp-debug.js
 ├── out.txt
 ├── package.json
 ├── README.md
-├── spec-test.sh
 ├── src
 │   ├── debug-logger.ts
 │   ├── index.ts
@@ -43,10 +41,9 @@
 ├── test
 │   ├── env.d.ts
 │   └── index.spec.ts
-├── test1.sh
 ├── tsconfig.json
 ├── vitest.config.mts
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 44 files
+6 directories, 41 files
