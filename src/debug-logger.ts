@@ -101,45 +101,52 @@ export class DebugLogger {
    * @param env The environment object.
    * @param flowCount The number of complete flows to retrieve.
    */
-  static async getRecentFlowLogs(env: Env, flowCount: number = 2): Promise<DebugEvent[]> {
-    // 1. Lightweight Scan: Get the names of recent logs.
-    const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 250 });
-    // Manually sort keys reverse-chronologically.
-    list.keys.sort((a, b) => b.name.localeCompare(a.name));
+// In src/debug-logger.ts, update the getRecentFlowLogs method:
 
-    // 2. Find Target Flows: Identify the session IDs of the most recent OAuth flows.
-    const targetFlowSessionIds = new Set<string>();
-    for (const key of list.keys) {
-      // Key format: debug:${timestamp}_${sessionId}_${event}
-      const parts = key.name.split('_');
-      if (parts.length > 2) {
-        const sessionId = parts[1];
-        if (sessionId.startsWith('oauth_') || sessionId.startsWith('auth_')) {
-          targetFlowSessionIds.add(sessionId);
-          if (targetFlowSessionIds.size >= flowCount) {
-            break; // Stop once we've found enough flows.
-          }
+static async getRecentFlowLogs(env: Env, flowCount: number = 2): Promise<DebugEvent[]> {
+  // 1. Lightweight Scan: Get MORE keys to ensure we find OAuth flows
+  const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 }); // Increased from 250
+  // Manually sort keys reverse-chronologically.
+  list.keys.sort((a, b) => b.name.localeCompare(a.name));
+
+  // 2. Find Target Flows: Identify the session IDs of the most recent OAuth flows.
+  const targetFlowSessionIds = new Set<string>();
+  for (const key of list.keys) {
+    // Key format: debug:${timestamp}_${sessionId}_${event}
+    const parts = key.name.split('_');
+    if (parts.length > 2) {
+      const sessionId = parts[1];
+      // Also include plain session IDs that have OAuth events
+      const eventName = parts.slice(2).join('_');
+      if (sessionId.startsWith('oauth_') || 
+          sessionId.startsWith('auth_') || 
+          eventName.includes('oauth') || 
+          eventName.includes('token')) {
+        targetFlowSessionIds.add(sessionId);
+        if (targetFlowSessionIds.size >= flowCount) {
+          break; // Stop once we've found enough flows.
         }
       }
     }
-
-    // 3. Targeted Fetch: Filter the key list and fetch data only for the target flows.
-    const keysToFetch = list.keys.filter(key => {
-      const parts = key.name.split('_');
-      return parts.length > 2 && targetFlowSessionIds.has(parts[1]);
-    });
-
-    const events: DebugEvent[] = [];
-    for (const key of keysToFetch) {
-      const data = await env.AUTH_STORE.get(key.name);
-      if (data) {
-        events.push(JSON.parse(data));
-      }
-    }
-
-    events.sort((a, b) => b.timestamp - a.timestamp);
-    return events;
   }
+
+  // 3. Targeted Fetch: Filter the key list and fetch data only for the target flows.
+  const keysToFetch = list.keys.filter(key => {
+    const parts = key.name.split('_');
+    return parts.length > 2 && targetFlowSessionIds.has(parts[1]);
+  });
+
+  const events: DebugEvent[] = [];
+  for (const key of keysToFetch) {
+    const data = await env.AUTH_STORE.get(key.name);
+    if (data) {
+      events.push(JSON.parse(data));
+    }
+  }
+
+  events.sort((a, b) => b.timestamp - a.timestamp);
+  return events;
+}
 
   static async getRecentLogs(env: Env, limit: number = 100): Promise<DebugEvent[]> {
     const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });

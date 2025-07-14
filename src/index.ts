@@ -276,6 +276,62 @@ app.get('/debug/kv', async (c) => {
   }
 });
 
+// Add this to src/index.ts after the /debug/kv endpoint
+
+/**
+ * Debug endpoint to check token storage
+ */
+app.get('/debug/tokens', async (c) => {
+  try {
+    // List all token keys
+    const tokenList = await c.env.AUTH_STORE.list({ prefix: 'token:', limit: 100 });
+    
+    // Get sample token data
+    const samples: any[] = [];
+    for (const key of tokenList.keys.slice(0, 5)) {
+      const value = await c.env.AUTH_STORE.get(key.name);
+      if (value) {
+        const data = JSON.parse(value);
+        samples.push({
+          key: key.name,
+          token_prefix: key.name.split(':')[1]?.substring(0, 8) + '...',
+          data: {
+            ...data,
+            // Redact sensitive info
+            userName: data.userName,
+            userId: data.userId,
+            client_id: data.client_id,
+            created_at: data.created_at,
+            age_minutes: Math.floor((Date.now() - data.created_at) / 60000)
+          }
+        });
+      }
+    }
+    
+    // Also check for auth codes
+    const codeList = await c.env.AUTH_STORE.list({ prefix: 'auth_code:', limit: 10 });
+    
+    return c.json({
+      tokens: {
+        total: tokenList.keys.length,
+        complete: tokenList.list_complete,
+        keys: tokenList.keys.map(k => k.name.replace(/token:(.{8}).*/, 'token:$1...')),
+        samples
+      },
+      auth_codes: {
+        total: codeList.keys.length,
+        complete: codeList.list_complete,
+        keys: codeList.keys.map(k => k.name)
+      }
+    });
+  } catch (error) {
+    return c.json({
+      error: 'Failed to read tokens',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
 // Add this endpoint to src/index.ts after the existing debug endpoints
 
 /**

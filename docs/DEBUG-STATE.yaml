@@ -5,16 +5,17 @@
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "graceful-eagle"
-  last_update: "2025-07-14T19:45:00Z"
+  deployment: "happy-owl"
+  last_update: "2025-07-14T22:30:00Z"
 
 state:
   build: "PASS"
   inspector_connect: "PASS"
   tool_execution: "PASS"
   auth_flow: "PASS"
-  claude_integration: "PARTIAL"
-  logging: "FAIL_KV_LIMIT"
+  claude_integration: "FAIL"
+  logging: "PASS"
+  dashboard_display: "FAIL"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -29,10 +30,10 @@ proven:
 - "oauth_manual_test==success"
 - "oauth_code_generation==working"
 - "dashboard_import==dashboard.ts"
-- "claude_sends_redirect_uri==https://example.com/callback"
-- "logging_endpoints==working"
-- "claude_shows_connected_popup==true"
-- "oauth_completes_successfully==true"
+- "logging_system==working"
+- "oauth_logs_created==true"
+- "claude_redirect_uri==https://claude.ai/api/mcp/auth_callback"
+- "token_exchange==working"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -40,31 +41,28 @@ failed:
 - "c.get('debugLogger')->2769"
 - "getUserInfo->2339"
 - "dashboard.txt->2307"
-- "claude_ai_integration->redirects_to_example.com"
+- "claude_ai_integration->shows_requires_connection"
+- "dashboard_display->not_showing_oauth_logs"
 
 hypotheses:
   h1:
-    desc: "claude.ai_sends_wrong_redirect_uri"
-    test: "check_oauth_authorize_params"
+    desc: "dashboard_template_issue"
+    test: "check_dashboard_rendering"
     priority: 1
-    status: "CONFIRMED"
-    solution: "intercept_and_replace_example.com"
   h2:
-    desc: "logging_kv_issue"
-    test: "test_kv_directly"
+    desc: "do_props_not_passed"
+    test: "verify_do_initialization"
     priority: 2
-    status: "RESOLVED"
   h3:
-    desc: "claude_callback_url_pattern"
-    test: "find_correct_claude_callback"
-    priority: 1
-    status: "NEEDS_TESTING"
+    desc: "mcp_connection_after_oauth"
+    test: "check_mcp_session_with_token"
+    priority: 3
 
 blockers:
-- "claude.ai_redirects_to_example.com_not_claude"
-- "need_correct_claude_callback_url"
+- "claude.ai_shows_requires_connection_after_oauth"
+- "dashboard_not_displaying_oauth_logs"
 
-next_action: "test:claude_callback_url_variations"
+next_action: "investigate:dashboard_template_rendering"
 
 code_refs:
   serve: "src/index.ts:L34"
@@ -74,7 +72,8 @@ code_refs:
   dashboard: "src/dashboard.ts"
   test_log: "src/index.ts:L98"
   kv_debug: "src/index.ts:L116"
-  authorize_fix: "src/rtm-handler.ts:L30-L55"
+  getRecentFlowLogs: "src/debug-logger.ts:L108"
+  createDebugDashboard: "src/debug-logger.ts:L207"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -84,47 +83,31 @@ errors_fixed:
   e5: "getUserInfo->mock_data"
   e6: "dashboard.txt->dashboard.ts"
   e7: "DebugEvent->import_type"
+  e8: "logging_not_working->actually_working"
 
-oauth_test:
-  url: "/authorize?response_type=code&client_id=test&redirect_uri=https://example.com/callback&state=test123"
-  frob: "20bb29e2a290a306b28b977f08710e6076db3a6a"
-  token: "9ab201dd..."
-  code: "98d172c2-b8aa-4110-9f2f-ea830c8a212f"
-  redirect: "https://example.com/callback?code=...&state=test123"
-  result: "success_but_wrong_redirect"
+oauth_test_claude:
+  session: "oauth_p1c1A5dwDfRV7kPvyBWg5q6G1iA5n66YdxWgjiXUfRc"
+  redirect_uri: "https://claude.ai/api/mcp/auth_callback"
+  code: "a0d2d780-b51a-44bf-80b3-f331cbeed354"
+  redirect: "https://claude.ai/api/mcp/auth_callback?code=...&state=..."
+  result: "oauth_success_but_mcp_connection_fails"
 
 current_issues:
   claude_ai_integration:
     symptom: "shows_requires_connection_after_oauth"
-    redirect: "sends_to_example.com"
-    expected: "should_redirect_to_claude.ai"
-    root_cause: "claude_sends_redirect_uri=example.com"
-    fix: "intercept_and_replace_in_authorize_endpoint"
-  debug_logging:
-    symptom: "no_logs_in_dashboard"
-    test1: "/test-log"
-    test2: "/debug/kv"
-    test3: "/debug/all"
-    status: "RESOLVED_endpoints_working"
-
-claude_callback_patterns:
-  observed: "https://example.com/callback"
-  possible:
-  - "https://claude.ai/api/auth/callback/custom"
-  - "https://claude.ai/api/oauth/callback"
-  - "https://claude.ai/auth/callback"
-  - "https://claude.ai/integrations/callback"
+    oauth_flow: "completes_successfully"
+    redirect: "correct_to_claude.ai"
+    possible_cause: "do_props_or_mcp_session"
+  dashboard_display:
+    symptom: "shows_no_oauth_flows"
+    logs_exist: "true"
+    test_endpoints: "working"
+    possible_cause: "template_rendering"
 
 sessions:
-- ts: "2025-07-14T19:45:00Z"
-  fixes: [ "kv_limit_diagnosed", "cleanup_endpoint_added" ]
+- ts: "2025-07-14T22:30:00Z"
+  fixes: [ "identified_logs_working", "found_claude_correct_redirect" ]
   time: 15
-- ts: "2025-07-14T19:10:00Z"
-  fixes: [ "added_redirect_uri_fix" ]
-  time: 10
-- ts: "2025-07-14T19:00:00Z"
-  fixes: [ "diagnosed_claude_redirect_issue", "verified_logging_works" ]
-  time: 30
 - ts: "2025-07-14T16:30:00Z"
   fixes: [ "dashboard_import", "debug_endpoints" ]
   time: 30
@@ -139,7 +122,7 @@ sessions:
   time: 240
 
 metrics:
-  orientation: [ 0, 120, 30, 5, 5 ]
+  orientation: [ 0, 120, 30, 5, 15 ]
   redundant: [ 3, 0, 0, 0, 0 ]
   hypothesis_success: [ 1, 1, 1, 1 ]
   forward: true
