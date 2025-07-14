@@ -28,7 +28,7 @@
 ├── package.json
 ├── README.md
 ├── src
-│   ├── dashboard.txt
+│   ├── dashboard.ts
 │   ├── debug-logger.ts
 │   ├── index.ts
 │   ├── protocol-logger.ts
