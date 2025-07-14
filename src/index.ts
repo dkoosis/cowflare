@@ -12,6 +12,7 @@ import { RtmMCP } from './rtm-mcp';
 import { withDebugLogging, DebugLogger, createDebugDashboard } from './debug-logger';
 import { createRtmHandler } from './rtm-handler';
 import type { Env } from './types';
+import type { DebugEvent } from './debug-logger';
 
 // --- Constants and Configuration ---
 
@@ -131,7 +132,15 @@ app.get('/debug', (c) => {
  * Debug endpoint to view ALL logs (not just OAuth flows)
  * Temporary endpoint for debugging
  */
+// Add this route to src/index.ts after the existing /debug route
+
+/**
+ * Debug endpoint to view ALL logs (not just OAuth flows)
+ * Temporary endpoint for debugging
+ */
+// Then update the /debug/all endpoint to be simpler:
 app.get('/debug/all', async (c) => {
+  const { DebugLogger } = await import('./debug-logger');
   const logs = await DebugLogger.getRecentLogs(c.env, 50); // Get last 50 logs
   
   // Group by session ID
@@ -204,6 +213,66 @@ app.post('/debug/delete', async (c) => {
   } catch (e) {
     console.error('Failed to delete logs:', e);
     return c.json({ error: 'Failed to delete logs' }, 500);
+  }
+});
+
+// Add this to src/index.ts after other routes
+
+/**
+ * Test endpoint to verify logging is working
+ */
+app.get('/test-log', async (c) => {
+  const logger = c.get('debugLogger');
+  const sessionId = c.get('debugSessionId');
+  
+  // Log a test event
+  await logger.log('test_manual_log', {
+    test: true,
+    timestamp: new Date().toISOString(),
+    sessionId: sessionId,
+    message: 'Manual test log entry'
+  });
+  
+  return c.json({
+    message: 'Test log created',
+    sessionId: sessionId,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Add this to src/index.ts after other routes
+
+/**
+ * Debug endpoint to check KV storage directly
+ */
+app.get('/debug/kv', async (c) => {
+  try {
+    // List all keys with debug prefix
+    const debugList = await c.env.AUTH_STORE.list({ prefix: 'debug:', limit: 10 });
+    
+    // Get a few sample values
+    const samples: any[] = [];
+    for (const key of debugList.keys.slice(0, 3)) {
+      const value = await c.env.AUTH_STORE.get(key.name);
+      if (value) {
+        samples.push({
+          key: key.name,
+          data: JSON.parse(value)
+        });
+      }
+    }
+    
+    return c.json({
+      totalKeys: debugList.keys.length,
+      complete: debugList.list_complete,
+      keys: debugList.keys.map(k => k.name),
+      samples: samples
+    });
+  } catch (error) {
+    return c.json({
+      error: 'Failed to read KV',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
   }
 });
 

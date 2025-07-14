@@ -5,15 +5,16 @@
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "swift-tiger"
-  last_update: "2025-07-13T22:30:00Z"
+  deployment: "happy-owl"
+  last_update: "2025-07-14T16:30:00Z"
 
 state:
   build: "PASS"
   inspector_connect: "PASS"
   tool_execution: "PASS"
   auth_flow: "PASS"
-  claude_integration: "UNTESTED"
+  claude_integration: "FAIL"
+  logging: "INVESTIGATING"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -25,28 +26,46 @@ proven:
 - "hono_app==Hono<{Bindings:Env;Variables:Variables}>()"
 - "oauth_flow==/authorize->frob->token->code->redirect"
 - "deployment_name==Math.floor((Date.now()/1000)%adjectives.length)"
+- "oauth_manual_test==success"
+- "oauth_code_generation==working"
+- "dashboard_import==dashboard.ts"
 
 failed:
 - "serveStreamableHttp->2339"
 - "origin:string[]->2322"
 - "c.get('debugLogger')->2769"
 - "getUserInfo->2339"
+- "dashboard.txt->2307"
+- "claude_ai_integration->redirects_to_example.com"
 
 hypotheses:
   h1:
-    desc: "claude_add->oauth_complete->tools_work"
-    test: "claude_desktop_config"
+    desc: "claude.ai_sends_wrong_redirect_uri"
+    test: "check_oauth_authorize_params"
     priority: 1
+  h2:
+    desc: "logging_kv_issue"
+    test: "test_kv_directly"
+    priority: 2
+  h3:
+    desc: "session_id_mismatch"
+    test: "verify_oauth_state_handling"
+    priority: 3
 
-blockers: []
+blockers:
+- "claude.ai_redirects_to_example.com_not_claude"
+- "debug_logs_not_visible"
 
-next_action: "claude_desktop:add_mcp_server"
+next_action: "debug:test_logging_endpoints"
 
 code_refs:
-  serve: "src/index.ts:L84"
-  cors: "src/index.ts:L86"
+  serve: "src/index.ts:L34"
+  cors: "src/index.ts:L36"
   types: "src/rtm-handler.ts:L10-L14"
   mock_user: "src/rtm-handler.ts:L340-L350"
+  dashboard: "src/dashboard.ts"
+  test_log: "src/index.ts:L98"
+  kv_debug: "src/index.ts:L116"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -54,15 +73,32 @@ errors_fixed:
   e3: "origin:[]->origin:string"
   e4: "unknown_logger->type:Variables"
   e5: "getUserInfo->mock_data"
+  e6: "dashboard.txt->dashboard.ts"
+  e7: "DebugEvent->import_type"
 
 oauth_test:
   url: "/authorize?response_type=code&client_id=test&redirect_uri=https://example.com/callback&state=test123"
   frob: "20bb29e2a290a306b28b977f08710e6076db3a6a"
   token: "9ab201dd..."
-  code: "a386cb27-d99d-4537-a41f-73264b4cf0a9"
+  code: "98d172c2-b8aa-4110-9f2f-ea830c8a212f"
   redirect: "https://example.com/callback?code=...&state=test123"
+  result: "success_but_wrong_redirect"
+
+current_issues:
+  claude_ai_integration:
+    symptom: "shows_requires_connection_after_oauth"
+    redirect: "sends_to_example.com"
+    expected: "should_redirect_to_claude.ai"
+  debug_logging:
+    symptom: "no_logs_in_dashboard"
+    test1: "/test-log"
+    test2: "/debug/kv"
+    test3: "/debug/all"
 
 sessions:
+- ts: "2025-07-14T16:30:00Z"
+  fixes: [ "dashboard_import", "debug_endpoints" ]
+  time: 30
 - ts: "2025-07-13T22:30:00Z"
   fixes: [ "hono_types", "oauth_test" ]
   time: 30
@@ -74,7 +110,7 @@ sessions:
   time: 240
 
 metrics:
-  orientation: [ 0, 120, 30 ]
-  redundant: [ 3, 0, 0 ]
-  hypothesis_success: [ 1, 1 ]
+  orientation: [ 0, 120, 30, 5 ]
+  redundant: [ 3, 0, 0, 0 ]
+  hypothesis_success: [ 1, 1, 1 ]
   forward: true
