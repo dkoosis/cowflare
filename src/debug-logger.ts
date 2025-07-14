@@ -91,7 +91,6 @@ export class DebugLogger {
     const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
     const events: DebugEvent[] = [];
     
-    // Get all events
     for (const key of list.keys) {
       const data = await env.AUTH_STORE.get(key.name);
       if (data) {
@@ -99,10 +98,8 @@ export class DebugLogger {
       }
     }
     
-    // Sort by timestamp descending (newest first)
     events.sort((a, b) => b.timestamp - a.timestamp);
     
-    // Return limited number of events
     return events.slice(0, limit);
   }
 
@@ -110,57 +107,84 @@ export class DebugLogger {
     const allLogs = await this.getRecentLogs(env, 1000);
     return allLogs.filter(log => log.sessionId === sessionId);
   }
+
+  /**
+   * NEW: Deletes all logs associated with a set of session IDs.
+   * This is inefficient due to the 'debug:' key structure, requiring a broad list and filter operation.
+   * @param env - The environment object with the AUTH_STORE.
+   * @param sessionIds - An array of session IDs whose logs should be deleted.
+   */
+  static async deleteFlowLogs(env: Env, sessionIds: string[]): Promise<{ deleted: number }> {
+    const keysToDelete = new Set<string>();
+    const sessionSet = new Set(sessionIds);
+
+    // List recent debug logs and filter for keys belonging to the target sessions
+    // Note: The key format is `debug:${timestamp}_${sessionId}_${event}`
+    const debugList = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
+    for (const key of debugList.keys) {
+      const parts = key.name.split('_');
+      // The session ID is expected to be the second part of the key name
+      if (parts.length > 1 && sessionSet.has(parts[1])) {
+        keysToDelete.add(key.name);
+      }
+    }
+
+    // List and add protocol logs for deletion (this uses an efficient prefix search)
+    for (const sessionId of sessionIds) {
+      const protocolList = await env.AUTH_STORE.list({ prefix: `protocol:${sessionId}` });
+      for (const key of protocolList.keys) {
+        keysToDelete.add(key.name);
+      }
+    }
+
+    const uniqueKeys = Array.from(keysToDelete);
+    if (uniqueKeys.length > 0) {
+      await env.AUTH_STORE.delete(uniqueKeys);
+    }
+    
+    return { deleted: uniqueKeys.length };
+  }
 }
 
 // Enhanced middleware that maintains session continuity across requests
 export const withDebugLogging = async (c: any, next: any) => {
-  // Try to get session from multiple sources
   let debugSessionId = null;
   
-  // 1. Check for existing debug session cookie
   const debugCookie = getCookie(c, 'debug_session_id');
   if (debugCookie) {
     debugSessionId = debugCookie;
   }
   
-  // 2. Check for OAuth state parameter (links OAuth flow)
   const state = c.req.query('state');
   if (state && !debugSessionId) {
-    // Use state as session ID for OAuth flow continuity
     debugSessionId = `oauth_${state}`;
   }
   
-  // 3. Check for Authorization header (links authenticated requests)
   const authHeader = c.req.header('Authorization');
   if (authHeader && !debugSessionId) {
-    // Create session based on token prefix
-    const tokenPrefix = authHeader.substring(7, 15); // First 8 chars of token
+    const tokenPrefix = authHeader.substring(7, 15);
     debugSessionId = `auth_${tokenPrefix}`;
   }
   
-  // 4. Check for MCP-Session-Id header (links MCP sessions)
   const mcpSessionId = c.req.header('Mcp-Session-Id');
   if (mcpSessionId && !debugSessionId) {
     debugSessionId = `mcp_${mcpSessionId}`;
   }
   
-  // 5. Generate new session only if none found
   if (!debugSessionId) {
     debugSessionId = crypto.randomUUID();
   }
   
-  // Set cookie to maintain session
   setCookie(c, 'debug_session_id', debugSessionId, {
     path: '/',
     secure: true,
     httpOnly: true,
-    maxAge: 3600, // 1 hour
+    maxAge: 3600,
     sameSite: 'Lax'
   });
   
   const logger = new DebugLogger(c.env, debugSessionId);
   
-  // Log MCP transport details for debugging
   const url = new URL(c.req.url);
   if (url.pathname.includes('/mcp')) {
     await logger.logMcpTransport(c.req.raw, 'streamable-http');
@@ -174,8 +198,26 @@ export const withDebugLogging = async (c: any, next: any) => {
 
 
 // Debug dashboard 
-// Complete createDebugDashboard function for debug-logger.ts
+/*
+  TODO: For the delete functionality to work, you must create an API endpoint.
+  This endpoint should handle a POST request, parse the `sessionIds` from the body,
+  and call the `DebugLogger.deleteFlowLogs` static method.
 
+  Example (using Hono router):
+  app.post('/debug/delete', async (c) => {
+    try {
+      const { sessionIds } = await c.req.json();
+      if (!Array.isArray(sessionIds)) {
+        return c.json({ error: 'Invalid request body' }, 400);
+      }
+      const result = await DebugLogger.deleteFlowLogs(c.env, sessionIds);
+      return c.json(result);
+    } catch (e) {
+      console.error('Failed to delete logs:', e);
+      return c.json({ error: 'Failed to delete logs' }, 500);
+    }
+  });
+*/
 export function createDebugDashboard(deploymentName?: string, deploymentTime?: string) {
   return async (c: any) => {
     const { DebugLogger } = await import('./debug-logger');
@@ -183,7 +225,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
     
     const logs = await DebugLogger.getRecentLogs(c.env, 500);
     
-    // Group logs by session
     const sessionGroups = new Map<string, DebugEvent[]>();
     for (const log of logs) {
       if (!sessionGroups.has(log.sessionId)) {
@@ -192,7 +233,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
       sessionGroups.get(log.sessionId)!.push(log);
     }
     
-    // Correlate sessions into unified flows
     const correlateFlows = (events: DebugEvent[]) => {
       const flows = new Map<string, {
         primarySessionId: string;
@@ -210,7 +250,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
         protocolLogs?: any[];
       }>();
 
-      // Initialize flows
       events.forEach(event => {
         const flowKey = event.sessionId.startsWith('oauth_') ? event.sessionId : 
                        event.sessionId.startsWith('auth_') ? event.sessionId : 
@@ -236,16 +275,13 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
         flow.events.push(event);
         flow.relatedSessions.add(event.sessionId);
         
-        // Update flow metadata
         if (event.timestamp < flow.startTime) flow.startTime = event.timestamp;
         if (event.timestamp > flow.endTime) flow.endTime = event.timestamp;
         
-        // Track specific events
         if (event.event.includes('token')) flow.hasToken = true;
         if (event.event.includes('discovery')) flow.hasDiscovery = true;
         if (event.endpoint === '/mcp') flow.hasMcpRequest = true;
         
-        // Track MCP-specific events
         if (event.event === 'mcp_transport_type') {
           flow.hasMcpTransport = true;
           flow.mcpTransportType = event.data.transport;
@@ -258,7 +294,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
         }
       });
       
-      // Convert to array and sort
       return Array.from(flows.values())
         .map(flow => {
           flow.events.sort((a, b) => a.timestamp - b.timestamp);
@@ -269,39 +304,27 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
     
     const correlatedFlows = correlateFlows(logs);
     
-    // Get protocol logs for correlated flows
     for (const flow of correlatedFlows) {
       flow.protocolLogs = [];
-      // Check all related sessions for protocol logs
       for (const sessionId of flow.relatedSessions) {
         if (sessionId.startsWith('oauth_') || sessionId.startsWith('auth_')) {
-          continue; // Skip correlation keys
+          continue;
         }
         try {
           const txs = await ProtocolLogger.getSessionTransactions(c.env, sessionId);
           flow.protocolLogs.push(...txs);
-        } catch (e) {
-          // Session might not have protocol logs
-        }
+        } catch (e) {}
       }
     }
     
-    // Use correlated flows instead of oauthFlows
     const oauthFlows = correlatedFlows.filter(flow => 
       flow.events.some(e => e.event.includes('oauth') || e.event.includes('token'))
     );
     
-    // Format time helper with Eastern Time
     const formatTime = (timestamp: number) => {
-      const date = new Date(timestamp);
-      return date.toLocaleString('en-US', {
+      return new Date(timestamp).toLocaleString('en-US', {
         timeZone: 'America/New_York',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
       });
     };
     
@@ -311,188 +334,45 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
       <head>
         <title>RTM MCP Debug Dashboard</title>
         <style>
-          body {
-            font-family: -apple-system, system-ui, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #0f0f0f;
-            color: #e0e0e0;
-          }
-          .container {
-            max-width: 1600px;
-            margin: 0 auto;
-          }
-          .deployment-banner {
-            background: linear-gradient(135deg, #1a4d1a, #2d7d2d);
-            color: #4ade80;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            text-align: center;
-            border: 2px solid #22c55e;
-            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
-          }
-          .deployment-name {
-            font-size: 28px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-          .deployment-time {
-            font-size: 14px;
-            opacity: 0.8;
-            margin-top: 5px;
-          }
-          h1 {
-            margin-bottom: 10px;
-            color: #fff;
-          }
-          .subtitle {
-            color: #888;
-            margin-bottom: 20px;
-          }
-          .controls {
-            background: #1a1a1a;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            border: 1px solid #333;
-          }
-          button {
-            background: #2d2d2d;
-            color: #e0e0e0;
-            border: 1px solid #444;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-          }
-          button:hover {
-            background: #3d3d3d;
-          }
-          .session-card {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-          }
-          .session-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            cursor: pointer;
-          }
-          .session-header:hover {
-            color: #fff;
-          }
-          .session-id {
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 14px;
-            color: #888;
-          }
-          .session-duration {
-            color: #666;
-            font-size: 14px;
-          }
-          .event-row {
-            display: flex;
-            align-items: flex-start;
-            padding: 8px 0;
-            border-bottom: 1px solid #2a2a2a;
-            font-size: 14px;
-          }
-          .event-row:last-child {
-            border-bottom: none;
-          }
-          .event-time {
-            width: 100px;
-            color: #666;
-            font-family: 'SF Mono', Monaco, monospace;
-          }
-          .event-name {
-            width: 250px;
-            color: #4a9eff;
-            font-weight: 500;
-          }
-          .event-name.mcp {
-            color: #8b5cf6;
-          }
-          .event-endpoint {
-            width: 200px;
-            color: #888;
-            font-family: 'SF Mono', Monaco, monospace;
-          }
-          .event-data {
-            flex: 1;
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 12px;
-            background: #0a0a0a;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #2a2a2a;
-            white-space: pre-wrap;
-            overflow-x: auto;
-            margin-left: 10px;
-            max-width: 600px;
-            word-break: break-word;
-          }
-          .success {
-            color: #4ade80;
-          }
-          .error {
-            color: #f87171;
-          }
-          .warning {
-            color: #fbbf24;
-          }
-          .collapsed {
-            display: none;
-          }
-          .status-indicator {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 8px;
-          }
-          .status-success {
-            background: #22c55e;
-          }
-          .status-error {
-            background: #ef4444;
-          }
-          .status-pending {
-            background: #fbbf24;
-          }
-          .json-key {
-            color: #94a3b8;
-          }
-          .json-string {
-            color: #86efac;
-          }
-          .json-number {
-            color: #fbbf24;
-          }
-          .json-boolean {
-            color: #60a5fa;
-          }
-          .json-null {
-            color: #94a3b8;
-            font-style: italic;
-          }
+          body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; }
+          .container { max-width: 1600px; margin: 0 auto; }
+          .deployment-banner { background: linear-gradient(135deg, #1a4d1a, #2d7d2d); color: #4ade80; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; border: 2px solid #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2); }
+          .deployment-name { font-size: 28px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+          .deployment-time { font-size: 14px; opacity: 0.8; margin-top: 5px; }
+          h1 { margin-bottom: 10px; color: #fff; }
+          .subtitle { color: #888; margin-bottom: 20px; }
+          .controls { background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; border: 1px solid #333; }
+          button { background: #2d2d2d; color: #e0e0e0; border: 1px solid #444; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+          button:hover { background: #3d3d3d; }
+          .session-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; transition: opacity 0.3s ease; }
+          .session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; cursor: pointer; }
+          .session-header:hover { color: #fff; }
+          .session-title-group { display: flex; align-items: center; gap: 12px; }
+          .session-actions { display: flex; gap: 8px; margin-left: auto; }
+          .action-btn { font-size: 12px; padding: 4px 10px; background-color: #334155; border-color: #475569; }
+          .action-btn:hover { background-color: #475569; }
+          .delete-btn { background-color: #450a0a; border-color: #991b1b; color: #f87171; }
+          .delete-btn:hover { background-color: #7f1d1d; }
+          .session-duration { color: #666; font-size: 14px; text-align: right; }
+          .event-row { display: flex; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #2a2a2a; font-size: 14px; }
+          .event-time { width: 100px; color: #666; font-family: 'SF Mono', Monaco, monospace; }
+          .event-name { width: 250px; color: #4a9eff; font-weight: 500; }
+          .event-name.mcp { color: #8b5cf6; }
+          .event-endpoint { width: 200px; color: #888; font-family: 'SF Mono', Monaco, monospace; }
+          .event-data { flex: 1; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; background: #0a0a0a; padding: 8px; border-radius: 4px; border: 1px solid #2a2a2a; white-space: pre-wrap; overflow-x: auto; margin-left: 10px; max-width: 600px; word-break: break-word; }
+          .success { color: #4ade80; } .error { color: #f87171; } .warning { color: #fbbf24; }
+          .collapsed { display: none; }
+          .status-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+          .status-success { background: #22c55e; } .status-error { background: #ef4444; } .status-pending { background: #fbbf24; }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>🔍 RTM MCP Debug Dashboard</h1>
+          <h1>剥 RTM MCP Debug Dashboard</h1>
           
           ${deploymentName ? `
           <div class="deployment-banner">
-            <div class="deployment-name">🚀 ${deploymentName}</div>
+            <div class="deployment-name">噫 ${deploymentName}</div>
             <div class="deployment-time">Deployed: ${deploymentTime ? formatTime(new Date(deploymentTime).getTime()) : 'Unknown'}</div>
             <div class="deployment-time">Current: ${formatTime(Date.now())}</div>
           </div>
@@ -503,10 +383,9 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
           </div>
           
           <div class="controls">
-            <button onclick="location.reload()">🔄 Refresh</button>
-            <button onclick="expandAll()">📂 Expand All</button>
-            <button onclick="collapseAll()">📁 Collapse All</button>
-            <button onclick="exportLogs()">📤 Export Logs</button>
+            <button onclick="location.reload()">売 Refresh</button>
+            <button onclick="expandAll()">唐 Expand All</button>
+            <button onclick="collapseAll()">刀 Collapse All</button>
             <span style="margin-left: auto; color: #666;">
               Last updated: <span id="current-time">${formatTime(Date.now())}</span>
             </span>
@@ -516,21 +395,21 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
             <div class="session-card">
               <p>No OAuth flows detected. Waiting for authentication attempts...</p>
             </div>
-          ` : oauthFlows.map((flow, index) => {
-            const isLatest = index === 0;
-            const hasProtocolLogs = flow.protocolLogs && flow.protocolLogs.length > 0;
-            
-            return `
-              <div class="session-card">
+          ` : oauthFlows.map((flow, index) => `
+              <div class="session-card" id="card-${flow.primarySessionId}">
                 <div class="session-header" onclick="toggleSession('${flow.primarySessionId}')">
-                  <div>
+                  <div class="session-title-group">
                     <span class="status-indicator ${
                       flow.hasMcpError ? 'status-error' :
                       flow.hasMcpRequest && flow.hasMcpTransport ? 'status-success' : 
                       flow.hasToken ? 'status-pending' : 'status-error'
                     }"></span>
-                    <strong>Flow ${index + 1}</strong>
-                    ${isLatest ? '<span style="color: #22c55e; margin-left: 8px;">LATEST</span>' : ''}
+                    <strong>${deploymentName ? `${deploymentName} - ` : ''}Flow ${index + 1}</strong>
+                    ${index === 0 ? '<span style="color: #22c55e; font-weight: bold;">LATEST</span>' : ''}
+                  </div>
+                  <div class="session-actions">
+                    <button class="action-btn" onclick="event.stopPropagation(); exportFlow('${flow.primarySessionId}')">Export Flow</button>
+                    <button class="action-btn delete-btn" onclick="event.stopPropagation(); deleteFlow('${flow.primarySessionId}')">Delete Flow</button>
                   </div>
                   <div class="session-duration">
                     ${formatTime(flow.startTime)} - ${formatTime(flow.endTime)}
@@ -549,45 +428,73 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
                   `).join('')}
                 </div>
               </div>
-            `;
-          }).join('')}
+            `).join('')}
         </div>
         
         <script>
           const flowData = ${JSON.stringify(correlatedFlows)};
           
           function toggleSession(sessionId) {
-            const el = document.getElementById('session-' + sessionId);
-            if (el) {
-              el.classList.toggle('collapsed');
-            }
+            document.getElementById('session-' + sessionId)?.classList.toggle('collapsed');
           }
           
           function expandAll() {
-            document.querySelectorAll('.collapsed').forEach(el => {
-              el.classList.remove('collapsed');
-            });
+            document.querySelectorAll('.collapsed').forEach(el => el.classList.remove('collapsed'));
           }
           
           function collapseAll() {
-            document.querySelectorAll('[id^="session-"]').forEach(el => {
-              el.classList.add('collapsed');
-            });
+            document.querySelectorAll('[id^="session-"]').forEach(el => el.classList.add('collapsed'));
           }
           
-          function exportLogs() {
-            const logs = flowData;
-            const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+          function exportFlow(primarySessionId) {
+            const flow = flowData.find(f => f.primarySessionId === primarySessionId);
+            if (!flow) return;
+            
+            const blob = new Blob([JSON.stringify(flow, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'rtm-mcp-debug-logs.json';
+            a.download = \`flow-${primarySessionId}-logs.json\`;
             a.click();
+            URL.revokeObjectURL(url);
+          }
+
+          async function deleteFlow(primarySessionId) {
+            const flow = flowData.find(f => f.primarySessionId === primarySessionId);
+            if (!flow) return;
+
+            if (!confirm('Are you sure you want to delete this entire flow? This action cannot be undone.')) {
+              return;
+            }
+
+            const sessionIdsToDelete = Array.from(flow.relatedSessions);
+            
+            try {
+              const response = await fetch('/debug/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionIds: sessionIdsToDelete }),
+              });
+
+              if (response.ok) {
+                const card = document.getElementById('card-' + primarySessionId);
+                if (card) {
+                  card.style.opacity = '0';
+                  setTimeout(() => card.remove(), 300);
+                }
+              } else {
+                const errorResult = await response.json();
+                alert('Failed to delete logs: ' + (errorResult.error || 'Unknown error'));
+              }
+            } catch (error) {
+              console.error('Error deleting flow:', error);
+              alert('An error occurred while trying to delete the logs.');
+            }
           }
           
-          // Update current time
           setInterval(() => {
-            document.getElementById('current-time').textContent = new Date().toLocaleTimeString();
+            const el = document.getElementById('current-time');
+            if (el) el.textContent = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit' });
           }, 1000);
         </script>
       </body>

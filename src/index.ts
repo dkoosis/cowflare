@@ -140,6 +140,35 @@ app.get('/health', (c) => {
   });
 });
 
+/**
+ * Debug log deletion endpoint.
+ * Handles deletion of debug logs for specified session IDs.
+ */
+app.post('/debug/delete', async (c) => {
+  try {
+    const { sessionIds } = await c.req.json();
+    
+    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+      return c.json({ error: 'Invalid request body - sessionIds must be a non-empty array' }, 400);
+    }
+    
+    // Call the static method from DebugLogger
+    const result = await DebugLogger.deleteFlowLogs(c.env, sessionIds);
+    
+    // Log the deletion action
+    const logger = c.get('debugLogger');
+    await logger.log('debug_flows_deleted', {
+      sessionIds,
+      deletedCount: result.deleted
+    });
+    
+    return c.json(result);
+  } catch (e) {
+    console.error('Failed to delete logs:', e);
+    return c.json({ error: 'Failed to delete logs' }, 500);
+  }
+});
+
 // --- Exports ---
 
 /**
