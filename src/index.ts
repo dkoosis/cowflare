@@ -1,23 +1,37 @@
-// File: src/index.ts
+/**
+ * @file src/index.ts
+ * @description Main entry point for the Cowflare RTM MCP worker.
+ * This file sets up the Hono web server, configures middleware for logging and
+ * CORS, and defines all the necessary routes for the MCP protocol,
+ * authentication, health checks, and debugging.
+ */
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { RtmMCP } from './rtm-mcp';
-import { withDebugLogging, DebugLogger } from './debug-logger';
+import { withDebugLogging, DebugLogger, createDebugDashboard } from './debug-logger';
 import { createRtmHandler } from './rtm-handler';
 import type { Env } from './types';
 
-// Generate friendly deployment identifier
-const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
-const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
+// --- Constants and Configuration ---
 
-
-// Extend context type to include debugLogger
+/**
+ * A type definition for Hono's context variables, ensuring type safety
+ * for custom middleware values like the debug logger.
+ */
 type Variables = {
   debugLogger: DebugLogger;
   debugSessionId: string;
 };
 
-const generateDeploymentName = () => {
+/**
+ * Generates a memorable, human-readable name for each deployment instance
+ * based on the current time, aiding in identifying specific worker versions.
+ * @returns A string in the format "adjective-animal".
+ */
+const generateDeploymentName = (): string => {
+  const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
+  const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
   const now = Date.now();
   const adjIndex = Math.floor((now / 1000) % adjectives.length);
   const animalIndex = Math.floor((now / 100000) % animals.length);
@@ -25,16 +39,25 @@ const generateDeploymentName = () => {
 };
 
 const DEPLOYMENT_NAME = generateDeploymentName();
-const DEPLOYMENT_TIME_MODULE = new Date().toISOString(); // Will be epoch, but we'll fix in handlers
+const DEPLOYMENT_TIME_MODULE = new Date().toISOString();
 
 console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME_MODULE}`);
 
+// --- Hono App Initialization ---
+
+/**
+ * The main Hono application instance.
+ * It's typed with the environment bindings (`Env`) and custom variables (`Variables`)
+ * to provide end-to-end type safety.
+ */
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Apply debug logging middleware globally
+// --- Middleware Configuration ---
+
+// Apply the debug logging middleware to all incoming requests.
 app.use('*', withDebugLogging);
 
-// Enable CORS for MCP clients
+// Apply CORS middleware to allow requests from authorized origins like Claude.ai.
 app.use('*', cors({
   origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
   credentials: true,
@@ -43,166 +66,61 @@ app.use('*', cors({
   exposeHeaders: ['Mcp-Session-Id', 'Location']
 }));
 
-// Mount RTM OAuth handler for authentication endpoints
+// --- Route Definitions ---
+
+/**
+ * Mounts the RTM-specific authentication handler, which provides the
+ * necessary endpoints for our custom, non-OAuth authentication flow.
+ */
 const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
 
 /**
- * OAuth Discovery Endpoints
- * Required by MCP clients for OAuth 2.0 discovery (RFC 9728, RFC 8414)
+ * MCP (Model Context Protocol) Handler
+ * This is the core of the worker, handling all communication with the MCP client.
+ * It uses `serveStreamableHttp` to correctly implement the streaming transport
+ * required by the protocol.
  */
-
-// Protected resource metadata endpoint
-app.get('/.well-known/oauth-protected-resource', (c) => {
-  const logger = c.get('debugLogger');
-  logger.log('oauth_discovery_resource', {
-    endpoint: '/.well-known/oauth-protected-resource'
-  });
-
-  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
-  
-  return c.json({
-    authorization_servers: [baseUrl],
-    resource: `${baseUrl}/mcp`
-  });
-});
-
-// Authorization server metadata endpoint
-app.get('/.well-known/oauth-authorization-server', (c) => {
-  const logger = c.get('debugLogger');
-  logger.log('oauth_discovery_server', {
-    endpoint: '/.well-known/oauth-authorization-server'
-  });
-
-  const baseUrl = c.env.SERVER_URL || `https://${c.req.header('host')}`;
-  
-  return c.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`,
-    registration_endpoint: `${baseUrl}/register`,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
-    code_challenge_methods_supported: ['S256'],
-    token_endpoint_auth_methods_supported: ['none']
-  });
-});
-
-// Dynamic client registration endpoint
-app.post('/register', (c) => {
-  const logger = c.get('debugLogger');
-  logger.log('client_registration', {
-    endpoint: '/register'
-  });
-  
-  const clientId = crypto.randomUUID();
-  return c.json({
-    client_id: clientId,
-    client_secret: '',
-    client_id_issued_at: Math.floor(Date.now() / 1000),
-    grant_types: ['authorization_code'],
-    response_types: ['code'],
-    redirect_uris: ['https://claude.ai/auth/callback'],
-    token_endpoint_auth_method: 'none'
-  });
-});
-
-/**
- * MCP Protocol Handler
- * Fixed to use proper McpAgent serve pattern for streamable HTTP
- */
-app.all('/mcp/*', async (c) => {
-  const logger = c.get('debugLogger');
-  
-  logger.log('mcp_request', {
-    method: c.req.method,
-    path: c.req.path,
-    has_session_id: !!c.req.header('Mcp-Session-Id')
-  });
-
-  // Check if McpAgent has the expected static serve methods
-  const hasServeStreamableHttp = typeof (RtmMCP as any).serveStreamableHttp === 'function';
-  const hasServe = typeof (RtmMCP as any).serve === 'function';
-  
-  logger.log('mcp_serve_methods', {
-    hasServeStreamableHttp,
-    hasServe,
-    availableMethods: Object.getOwnPropertyNames(RtmMCP).filter(m => m.includes('serve'))
-  });
-
-  try {
-    if (hasServeStreamableHttp) {
-      // Use the streamable HTTP serve method if available
-      const handler = (RtmMCP as any).serveStreamableHttp('/mcp', {
-        binding: 'MCP_OBJECT',
-        corsOptions: {
-          origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
-          methods: 'GET, POST, OPTIONS',
-          headers: 'Content-Type, Authorization, Mcp-Session-Id',
-          exposeHeaders: 'Mcp-Session-Id, Location'
-        }
-      });
-      
-      return await handler.fetch(c.req.raw, c.env, c.executionCtx);
-    } else if (hasServe) {
-      // Try generic serve method with transport type
-      const handler = (RtmMCP as any).serve('/mcp', {
-        binding: 'MCP_OBJECT',
-        transportType: 'streamable-http',
-        corsOptions: {
-          origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
-          methods: 'GET, POST, OPTIONS',
-          headers: 'Content-Type, Authorization, Mcp-Session-Id',
-          exposeHeaders: 'Mcp-Session-Id, Location'
-        }
-      });
-      
-      return await handler.fetch(c.req.raw, c.env, c.executionCtx);
-    } else {
-      // Fallback to direct fetch if no serve methods exist
-      logger.log('mcp_fallback_direct_fetch', {
-        warning: 'No McpAgent serve methods found, using direct fetch'
-      });
-      
-      // For direct fetch, we need to ensure the Durable Object is properly initialized
-      const id = c.env.MCP_OBJECT.idFromName('rtm-mcp-default');
-      const stub = c.env.MCP_OBJECT.get(id);
-      
-      // Set transport type in the request if possible
-      const request = new Request(c.req.raw.url, {
-        method: c.req.raw.method,
-        headers: c.req.raw.headers,
-        body: c.req.raw.body
-      });
-      
-      return await stub.fetch(request);
+const mcpHandler = RtmMCP.serveStreamableHttp('/mcp', {
+    binding: 'MCP_OBJECT', // The name of the Durable Object binding in wrangler.toml
+    corsOptions: {
+        origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
+        methods: 'GET, POST, OPTIONS',
+        headers: 'Content-Type, Authorization, Mcp-Session-Id',
+        exposeHeaders: 'Mcp-Session-Id, Location'
     }
-  } catch (error) {
-    logger.log('mcp_error', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    
-    return c.json({ 
-      error: 'internal_server_error',
-      message: 'Failed to process MCP request'
-    }, 500);
-  }
 });
 
 /**
- * Debug and Health Endpoints
+ * The MCP route endpoint. All requests to `/mcp/*` are forwarded to the
+ * McpAgent's fetch handler, which manages the connection lifecycle.
  */
-
-// Debug dashboard
-app.get('/debug', async (c) => {
-  const { createDebugDashboard } = await import('./debug-logger');
- return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME_MODULE)(c);
+app.all('/mcp/*', (c) => {
+    const logger = c.get('debugLogger');
+    logger.log('mcp_request_handling', {
+        method: c.req.method,
+        path: c.req.path,
+        handler: 'serveStreamableHttp'
+    });
+    // Forward the request to the McpAgent's fetch method for processing.
+    return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
 });
 
-// Health check endpoint
+/**
+ * The debug dashboard endpoint.
+ * Provides a web interface to view live logs and transaction history.
+ */
+app.get('/debug', (c) => {
+  // Pass deployment info to the dashboard for display in the banner.
+  return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME_MODULE)(c);
+});
+
+/**
+ * The health check endpoint.
+ * Provides metadata about the running service, including its version, deployment
+ * name, and a check of which McpAgent methods are available.
+ */
 app.get('/health', (c) => {
-  // Check available McpAgent methods
   const mcpMethods = {
     hasServe: typeof (RtmMCP as any).serve === 'function',
     hasServeSSE: typeof (RtmMCP as any).serveSSE === 'function',
@@ -217,11 +135,22 @@ app.get('/health', (c) => {
     version: '2.5.0',
     deployment_name: DEPLOYMENT_NAME,
     transport: 'streamable-http',
-    mcp_compliant: true,
-    deployed_at: new Date().toISOString(),
+    mcp_compliant: mcpMethods.hasServeStreamableHttp, // Dynamically check compliance
+    deployed_at: DEPLOYMENT_TIME_MODULE,
     mcp_methods: mcpMethods
   });
 });
 
+// --- Exports ---
+
+/**
+ * The default export is the Hono app instance, which is what Cloudflare Workers
+ * will use to handle incoming requests.
+ */
 export default app;
+
+/**
+ * The RtmMCP class is also exported, which is required by the Cloudflare
+ * Worker runtime for Durable Object instantiation.
+ */
 export { RtmMCP };
