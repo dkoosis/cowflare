@@ -1,60 +1,47 @@
-/**
- * @file src/index.ts
- * @description Main entry point for the Cowflare RTM MCP worker.
- * This file sets up the Hono web server, configures middleware for logging and
- * CORS, and defines all the necessary routes for the MCP protocol,
- * authentication, health checks, and debugging.
- */
-
+// File: src/index.ts
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { getCookie, setCookie } from 'hono/cookie';
 import { RtmMCP } from './rtm-mcp';
-import { withDebugLogging, DebugLogger, createDebugDashboard } from './debug-logger';
 import { createRtmHandler } from './rtm-handler';
+import { withDebugLogging, createDebugDashboard } from './debug-logger';
 import type { Env } from './types';
 
-// --- Constants and Configuration ---
+// --- Variable Declarations ---
 
 /**
- * A type definition for Hono's context variables, ensuring type safety
- * for custom middleware values like the debug logger.
+ * The deployment name and timestamp, displayed in various locations
+ * such as the debug dashboard and health check endpoint.
+ * These values are replaced at build time.
+ */
+const DEPLOYMENT_NAME = '__DEPLOYMENT_NAME__';
+const DEPLOYMENT_TIME_MODULE = '__DEPLOYMENT_TIME__';
+
+// --- Type Definitions ---
+
+/**
+ * Define custom variables available in Hono context.
+ * This ensures TypeScript knows about our custom properties.
  */
 type Variables = {
-  debugLogger: DebugLogger;
+  debugLogger: any;
   debugSessionId: string;
 };
 
-/**
- * Generates a memorable, human-readable name for each deployment instance
- * based on the current time, aiding in identifying specific worker versions.
- * @returns A string in the format "adjective-animal".
- */
-const generateDeploymentName = (): string => {
-  const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
-  const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
-  const now = Date.now();
-  const adjIndex = Math.floor((now / 1000) % adjectives.length);
-  const animalIndex = Math.floor((now / 100000) % animals.length);
-  return `${adjectives[adjIndex]}-${animals[animalIndex]}`;
-};
-
-const DEPLOYMENT_NAME = generateDeploymentName();
-const DEPLOYMENT_TIME_MODULE = new Date().toISOString();
-
-console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME_MODULE}`);
-
-// --- Hono App Initialization ---
+// --- Application Setup ---
 
 /**
- * The main Hono application instance.
- * It's typed with the environment bindings (`Env`) and custom variables (`Variables`)
- * to provide end-to-end type safety.
+ * Main Hono application instance with proper typing.
+ * This handles all HTTP routing for our MCP server.
  */
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// --- Middleware Configuration ---
+// --- Middleware Setup ---
 
-// Apply the debug logging middleware to all incoming requests.
+/**
+ * Apply debug logging middleware to all routes.
+ * This creates a debug session and logger for each request.
+ */
 app.use('*', withDebugLogging);
 
 // Apply CORS middleware to allow requests from authorized origins like Claude.ai.
@@ -78,13 +65,13 @@ app.route('/', rtmHandler);
 /**
  * MCP (Model Context Protocol) Handler
  * This is the core of the worker, handling all communication with the MCP client.
- * It uses `serveStreamableHttp` to correctly implement the streaming transport
+ * It uses `serve` to correctly implement the streaming transport
  * required by the protocol.
  */
-const mcpHandler = RtmMCP.serveStreamableHttp('/mcp', {
+const mcpHandler = RtmMCP.serve('/mcp', {
     binding: 'MCP_OBJECT', // The name of the Durable Object binding in wrangler.toml
     corsOptions: {
-        origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
+        origin: 'http://localhost:*, https://*.claude.ai, https://claude.ai',
         methods: 'GET, POST, OPTIONS',
         headers: 'Content-Type, Authorization, Mcp-Session-Id',
         exposeHeaders: 'Mcp-Session-Id, Location'
@@ -100,7 +87,7 @@ app.all('/mcp/*', (c) => {
     logger.log('mcp_request_handling', {
         method: c.req.method,
         path: c.req.path,
-        handler: 'serveStreamableHttp'
+        handler: 'serve'
     });
     // Forward the request to the McpAgent's fetch method for processing.
     return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx);
@@ -124,7 +111,6 @@ app.get('/health', (c) => {
   const mcpMethods = {
     hasServe: typeof (RtmMCP as any).serve === 'function',
     hasServeSSE: typeof (RtmMCP as any).serveSSE === 'function',
-    hasServeStreamableHttp: typeof (RtmMCP as any).serveStreamableHttp === 'function',
     hasMount: typeof (RtmMCP as any).mount === 'function',
     hasFetch: typeof (RtmMCP as any).fetch === 'function'
   };
@@ -135,7 +121,7 @@ app.get('/health', (c) => {
     version: '2.5.0',
     deployment_name: DEPLOYMENT_NAME,
     transport: 'streamable-http',
-    mcp_compliant: mcpMethods.hasServeStreamableHttp, // Dynamically check compliance
+    mcp_compliant: mcpMethods.hasServe, // Dynamically check compliance
     deployed_at: DEPLOYMENT_TIME_MODULE,
     mcp_methods: mcpMethods
   });

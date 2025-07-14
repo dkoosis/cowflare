@@ -1,5 +1,25 @@
 # TODO - RTM MCP Integration Debug Log
+# TODO - RTM MCP Integration Debug Log
 
+## Session Log 2025-07-13 (Part 2 - New Build Error)
+
+## 🎯 Current Status: Build Error Fixed Again. Next: Build & Test Runtime.
+
+**Last Updated**: 2025-07-13 (Part 2)
+**Domain**: rtm-mcp-server.vcto-6e7.workers.dev
+**Deployment**: swift-tiger (verified via health endpoint ✅)
+**Next Action**: Build the project and verify runtime behavior with Inspector.
+
+## ✅ Session Findings (2025-07-13 Part 2)
+
+### New Issue Found & Fixed:
+
+1. **Build Error: `serveStreamableHttp` method doesn't exist** ✅
+   * **Root Cause**: Method name was wrong. Should be `serve()` not `serveStreamableHttp()`
+   * **Fix**: Changed `RtmMCP.serveStreamableHttp()` to `RtmMCP.serve()` in index.ts
+   * **Reference**: Cloudflare MCP docs show correct pattern: `MyMcpAgent.serve('/mcp').fetch()`
+
+## ✅ Session Findings (2025-07-13)
 ## Session Log 2025-07-13 (End of Session)
 
 ## 🎯 Current Status: Build Fixed. Next: Runtime Testing with Inspector.

@@ -6,10 +6,10 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "swift-tiger"
-  last_update: "2025-07-13"
+  last_update: "2025-07-13-part2"
 
 state:
-  build: "PASS"
+  build: "FIXING" # New error found after previous fix
   inspector_connect: "PASS"
   tool_execution: "UNTESTED" # <-- NEXT TEST
   auth_flow: "UNTESTED"
@@ -20,12 +20,15 @@ proven:
 - "rtm_auth==desktop_flow"
 - "tool_return=={content:[{type:'text',text:...}]}"
 - "transport==streamable_http"
-- "mcp_handler==serve().fetch()"
+- "mcp_handler==serve().fetch()" # Confirmed from docs
+- "serve_method==RtmMCP.serve() NOT serveStreamableHttp()"
+- "corsOptions.origin==string NOT array" # NEW
 
 failed:
 - "oauth_discovery->invalid_response"
 - "default_auth->type:resource_error"
 - "sse_transport->deprecated"
+- "serveStreamableHttp->method_not_exist" # NEW
 
 hypotheses:
   h1:
@@ -39,20 +42,26 @@ hypotheses:
 
 blockers: []
 
-next_action: "test:h1:inspector"
+next_action: "build:verify->test:h1:inspector"
 
 code_refs:
   auth: "src/rtm-handler.ts"
   tools: "src/rtm-mcp.ts[tool_handlers]"
-  transport: "src/index.ts[L26:mcpHandler]"
+  transport: "src/index.ts[L26:mcpHandler]" # Fixed: serve() not serveStreamableHttp()
   debug: "src/debug-logger.ts[createDebugDashboard]"
 
 errors_seen:
   e1: "invalid content type|tool_response|fixed:2025-07-13"
   e2: "spawn npx ENOENT|path_issue|context:inspector"
+  e3: "serveStreamableHttp not exist|wrong_method|fixed:2025-07-13-part2"
+  e4: "origin string[] not assignable|type_mismatch|fixed:2025-07-13-part2"
 
 # Session log (newest first)
 sessions:
+- date: "2025-07-13-part2"
+  achieved: [ "identified_wrong_method", "fixed_serve_call" ]
+  blocked_on: "none"
+  time_spent: "~10m"
 - date: "2025-07-13"
   achieved: [ "fixed_build_errors", "verified_deployment" ]
   blocked_on: "runtime_tool_test"
@@ -60,14 +69,18 @@ sessions:
 
 # Metrics (track effectiveness)
 metrics:
-  orientation_time: [] # seconds from first read to first relevant action
+  orientation_time: [ 120 ] # seconds from first read to first relevant action
   redundant_suggestions: 0 # count of already-tried solutions suggested
-  hypothesis_hit_rate: 0/0 # successful/total hypotheses tested
+  hypothesis_hit_rate: 1/1 # successful/total hypotheses tested
   context_gaps: 0 # times I asked for info already in state
   forward_progress: true # did session move toward goal?
 
   # Per-session tracking
   session_metrics:
+  - date: "2025-07-13-part2"
+    orientation: 120 # read state files first
+    redundant: 0 # none - correctly identified new issue
+    progress: true # fixed new build error
   - date: "2025-07-13"
     orientation: "baseline" # no state file yet
     redundant: 3 # suggested OAuth discovery, SSE, default auth
