@@ -37,14 +37,14 @@ export class DebugLogger {
       stackTrace: error?.stack
     };
     
-    // Store with timestamp-based key for better sorting
+    // Store with a timestamp-based key for better sorting and retrieval.
     const key = `debug:${Date.now()}_${this.sessionId}_${event}`;
     await this.env.AUTH_STORE.put(key, JSON.stringify(debugEvent), {
       expirationTtl: 86400 // 24 hours
     });
   }
 
-  // NEW: Specific MCP connection logging
+  // Specific MCP connection logging
   async logMcpConnection(type: 'attempt' | 'upgrade' | 'session' | 'error', data: Record<string, any> = {}, error?: Error) {
     const mcpEvent = `mcp_connection_${type}`;
     await this.log(mcpEvent, {
@@ -58,7 +58,7 @@ export class DebugLogger {
     }, error);
   }
 
-  // NEW: Log MCP transport detection (focusing on streamable HTTP)
+  // Log MCP transport detection (focusing on streamable HTTP)
   async logMcpTransport(request: Request, transportType: 'streamable-http' | 'unknown') {
     const url = new URL(request.url);
     await this.log('mcp_transport_type', {
@@ -74,7 +74,7 @@ export class DebugLogger {
     });
   }
 
-  // NEW: Log Durable Object initialization
+  // Log Durable Object initialization
   async logDurableObjectInit(doId: string, props: any) {
     await this.log('mcp_do_init', {
       durable_object_id: doId,
@@ -88,6 +88,8 @@ export class DebugLogger {
   }
 
   static async getRecentLogs(env: Env, limit: number = 100): Promise<DebugEvent[]> {
+    // Note: This list operation has a maximum limit of 1000 keys per call.
+    // For systems with very high log volume, pagination would be required.
     const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
     const events: DebugEvent[] = [];
     
@@ -109,7 +111,7 @@ export class DebugLogger {
   }
 
   /**
-   * NEW: Deletes all logs associated with a set of session IDs.
+   * Deletes all logs associated with a set of session IDs.
    * This is inefficient due to the 'debug:' key structure, requiring a broad list and filter operation.
    * @param env - The environment object with the AUTH_STORE.
    * @param sessionIds - An array of session IDs whose logs should be deleted.
@@ -119,17 +121,15 @@ export class DebugLogger {
     const sessionSet = new Set(sessionIds);
 
     // List recent debug logs and filter for keys belonging to the target sessions
-    // Note: The key format is `debug:${timestamp}_${sessionId}_${event}`
     const debugList = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
     for (const key of debugList.keys) {
       const parts = key.name.split('_');
-      // The session ID is expected to be the second part of the key name
       if (parts.length > 1 && sessionSet.has(parts[1])) {
         keysToDelete.add(key.name);
       }
     }
 
-    // List and add protocol logs for deletion (this uses an efficient prefix search)
+    // List and add protocol logs for deletion
     for (const sessionId of sessionIds) {
       const protocolList = await env.AUTH_STORE.list({ prefix: `protocol:${sessionId}` });
       for (const key of protocolList.keys) {
@@ -138,11 +138,16 @@ export class DebugLogger {
     }
 
     const uniqueKeys = Array.from(keysToDelete);
-    if (uniqueKeys.length > 0) {
-      await env.AUTH_STORE.delete(uniqueKeys);
+    
+    // The KV `delete` method in this environment only accepts a single key,
+    // so we must iterate. A bulk delete is not supported.
+    let deleted = 0;
+    for (const key of uniqueKeys) {
+      await env.AUTH_STORE.delete(key);
+      deleted++;
     }
     
-    return { deleted: uniqueKeys.length };
+    return { deleted };
   }
 }
 
@@ -179,7 +184,7 @@ export const withDebugLogging = async (c: any, next: any) => {
     path: '/',
     secure: true,
     httpOnly: true,
-    maxAge: 3600,
+    maxAge: 3600, // 1 hour
     sameSite: 'Lax'
   });
   
@@ -207,7 +212,7 @@ export const withDebugLogging = async (c: any, next: any) => {
   app.post('/debug/delete', async (c) => {
     try {
       const { sessionIds } = await c.req.json();
-      if (!Array.isArray(sessionIds)) {
+      if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
         return c.json({ error: 'Invalid request body' }, 400);
       }
       const result = await DebugLogger.deleteFlowLogs(c.env, sessionIds);
@@ -224,14 +229,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
     const { ProtocolLogger } = await import('./protocol-logger');
     
     const logs = await DebugLogger.getRecentLogs(c.env, 500);
-    
-    const sessionGroups = new Map<string, DebugEvent[]>();
-    for (const log of logs) {
-      if (!sessionGroups.has(log.sessionId)) {
-        sessionGroups.set(log.sessionId, []);
-      }
-      sessionGroups.get(log.sessionId)!.push(log);
-    }
     
     const correlateFlows = (events: DebugEvent[]) => {
       const flows = new Map<string, {
@@ -313,7 +310,9 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
         try {
           const txs = await ProtocolLogger.getSessionTransactions(c.env, sessionId);
           flow.protocolLogs.push(...txs);
-        } catch (e) {}
+        } catch (e) {
+          // Ignore errors if protocol logs for a session can't be fetched
+        }
       }
     }
     
@@ -330,8 +329,10 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
     
     return c.html(`
       <!DOCTYPE html>
-      <html>
+      <html lang="en">
       <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>RTM MCP Debug Dashboard</title>
         <style>
           body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; }
@@ -368,11 +369,11 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
       </head>
       <body>
         <div class="container">
-          <h1>剥 RTM MCP Debug Dashboard</h1>
+          <h1>⚙️ RTM MCP Debug Dashboard</h1>
           
           ${deploymentName ? `
           <div class="deployment-banner">
-            <div class="deployment-name">噫 ${deploymentName}</div>
+            <div class="deployment-name">🚀 ${deploymentName}</div>
             <div class="deployment-time">Deployed: ${deploymentTime ? formatTime(new Date(deploymentTime).getTime()) : 'Unknown'}</div>
             <div class="deployment-time">Current: ${formatTime(Date.now())}</div>
           </div>
@@ -383,9 +384,9 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
           </div>
           
           <div class="controls">
-            <button onclick="location.reload()">売 Refresh</button>
-            <button onclick="expandAll()">唐 Expand All</button>
-            <button onclick="collapseAll()">刀 Collapse All</button>
+            <button onclick="location.reload()">🔄 Refresh</button>
+            <button onclick="expandAll()">📂 Expand All</button>
+            <button onclick="collapseAll()">📁 Collapse All</button>
             <span style="margin-left: auto; color: #666;">
               Last updated: <span id="current-time">${formatTime(Date.now())}</span>
             </span>
@@ -408,8 +409,8 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
                     ${index === 0 ? '<span style="color: #22c55e; font-weight: bold;">LATEST</span>' : ''}
                   </div>
                   <div class="session-actions">
-                    <button class="action-btn" onclick="event.stopPropagation(); exportFlow('${flow.primarySessionId}')">Export Flow</button>
-                    <button class="action-btn delete-btn" onclick="event.stopPropagation(); deleteFlow('${flow.primarySessionId}')">Delete Flow</button>
+                    <button class="action-btn" onclick="event.stopPropagation(); exportFlow('${flow.primarySessionId}')">Export</button>
+                    <button class="action-btn delete-btn" onclick="event.stopPropagation(); deleteFlow('${flow.primarySessionId}')">Delete</button>
                   </div>
                   <div class="session-duration">
                     ${formatTime(flow.startTime)} - ${formatTime(flow.endTime)}
@@ -454,8 +455,11 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = \`flow-${primarySessionId}-logs.json\`;
+            // Use string concatenation to avoid nested template literal issues.
+            a.download = 'flow-' + primarySessionId + '-logs.json';
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
           }
 
