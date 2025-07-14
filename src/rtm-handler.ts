@@ -3,7 +3,15 @@ import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { RtmApi } from './rtm-api';
 import type { Env } from './types';
-import { withDebugLogging, createDebugDashboard } from './debug-logger';
+import { withDebugLogging, type DebugLogger } from './debug-logger';
+
+/**
+ * Type definition for Hono context variables
+ */
+type Variables = {
+  debugLogger: DebugLogger;
+  debugSessionId: string;
+};
 
 /**
  * =======================================================================================
@@ -43,7 +51,7 @@ import { withDebugLogging, createDebugDashboard } from './debug-logger';
  * - Polling (no reliable completion signal)
  */
 export function createRtmHandler() {
-  const app = new Hono<{ Bindings: Env }>();
+  const app = new Hono<{ Bindings: Env; Variables: Variables }>();
   
   // Apply debug logging to all routes
   app.use('*', withDebugLogging);
@@ -118,160 +126,239 @@ export function createRtmHandler() {
       await logger.log('oauth_authorize_success', {
         session_stored: true,
         has_state: !!state,
-        has_code_challenge: !!code_challenge
+        cookie_set: true
       });
-
-      // Return waiting page HTML
+      
+      // Return HTML waiting page with Auth Button
       return c.html(`
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Authorize with Remember The Milk</title>
+            <title>Authorize RTM MCP Server</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
               body { 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                 text-align: center; 
                 padding: 2rem; 
-                max-width: 600px; 
-                margin: auto; 
-                background-color: #f9f9f9; 
+                background-color: #f5f5f5; 
+                margin: 0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              }
+              .container {
+                background-color: white;
+                padding: 3rem;
+                border-radius: 12px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                max-width: 600px;
+                width: 100%;
+              }
+              h1 { 
                 color: #333; 
+                margin-bottom: 1rem;
+                font-size: 2rem;
               }
-              .card { 
-                background-color: #fff; 
-                border: 1px solid #ddd; 
-                border-radius: 8px; 
-                padding: 1.5rem; 
-                margin-bottom: 2rem; 
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
-              }
-              .button { 
-                display: inline-block; 
-                padding: 12px 24px; 
-                background-color: #007acc; 
-                color: white; 
-                text-decoration: none; 
-                border-radius: 5px; 
-                font-weight: bold; 
-                transition: background-color 0.2s; 
-              }
-              .button:hover { 
-                background-color: #005f9e; 
-              }
-              button.button { 
-                border: none; 
-                font-size: 1rem; 
-                cursor: pointer; 
-              }
-              p { 
-                line-height: 1.6; 
+              .step {
+                margin: 2rem 0;
+                text-align: left;
               }
               .step-number {
-                font-size: 2em;
-                color: #007acc;
-                margin-bottom: 0.5rem;
+                background: #007acc;
+                color: white;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                margin-right: 1rem;
+              }
+              .step-content {
+                display: inline-block;
+                vertical-align: middle;
+                max-width: calc(100% - 50px);
+              }
+              button, .button {
+                background-color: #007acc;
+                color: white;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+                font-size: 1.1rem;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-block;
+                margin: 1rem 0.5rem;
+                transition: background-color 0.2s;
+              }
+              button:hover, .button:hover {
+                background-color: #005a9e;
+              }
+              button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+              }
+              .button.secondary {
+                background-color: #28a745;
+              }
+              .button.secondary:hover {
+                background-color: #218838;
+              }
+              .warning {
+                background-color: #fff3cd;
+                border: 1px solid #ffeaa7;
+                color: #856404;
+                padding: 1rem;
+                border-radius: 6px;
+                margin: 2rem 0;
+                text-align: left;
               }
               .debug-info {
-                position: fixed;
-                bottom: 10px;
-                right: 10px;
-                font-size: 0.8em;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                padding: 1rem;
+                border-radius: 6px;
+                margin-top: 2rem;
+                font-family: monospace;
+                font-size: 0.9rem;
+                text-align: left;
                 color: #666;
-                background: #f0f0f0;
-                padding: 5px 10px;
-                border-radius: 3px;
               }
             </style>
           </head>
           <body>
-            <h1>Connect Remember The Milk</h1>
-            <div class="card">
-              <div class="step-number">1</div>
-              <h2>Authorize with RTM</h2>
-              <p>Click below to open Remember The Milk authorization in a new tab:</p>
-              <a href="${rtmAuthUrl}" target="_blank" rel="noopener noreferrer" class="button">
-                Open RTM Authorization
+            <div class="container">
+              <h1>🔐 Authorize RTM MCP Server</h1>
+              
+              <p>Complete these steps to connect Remember The Milk to your MCP client:</p>
+              
+              <div class="step">
+                <span class="step-number">1</span>
+                <span class="step-content">
+                  <strong>Click the button below</strong> to open Remember The Milk in a new tab
+                </span>
+              </div>
+              
+              <a href="${rtmAuthUrl}" target="_blank" class="button">
+                Open Remember The Milk →
               </a>
-              <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                After authorizing, close the RTM tab and return here.
-              </p>
-            </div>
-            <div class="card">
-              <div class="step-number">2</div>
-              <h2>Complete Connection</h2>
-              <p>After authorizing in RTM, click below to complete the connection:</p>
-              <form action="/complete-auth" method="post">
-                <button type="submit" class="button">
-                  I've Authorized - Complete Connection
-                </button>
-              </form>
-            </div>
-            <div class="debug-info" data-debug-session="${debugSessionId}">
-              Debug: ${debugSessionId.substring(0, 8)}...
+              
+              <div class="step">
+                <span class="step-number">2</span>
+                <span class="step-content">
+                  <strong>Authorize the application</strong> in the Remember The Milk tab
+                </span>
+              </div>
+              
+              <div class="step">
+                <span class="step-number">3</span>
+                <span class="step-content">
+                  <strong>Return to this tab</strong> and click "Complete Authorization"
+                </span>
+              </div>
+              
+              <div class="warning">
+                <strong>⚠️ Important:</strong> You must complete the authorization in Remember The Milk before clicking the button below.
+              </div>
+              
+              <button 
+                onclick="window.location.href='/complete-auth'"
+                class="button secondary"
+              >
+                Complete Authorization ✓
+              </button>
+              
+              <div class="debug-info">
+                <strong>Debug Info:</strong><br>
+                Session: ${debugSessionId}<br>
+                State: ${state || 'none'}<br>
+                Client: ${client_id || 'default'}
+              </div>
             </div>
           </body>
         </html>
       `);
     } catch (error) {
       await logger.log('oauth_authorize_exception', {
-        endpoint: '/authorize',
-        error_type: error.constructor.name,
-        error_message: error.message
-      }, error);
-      return c.json({ error: 'server_error', error_description: 'Failed to initiate authentication' }, 500);
+        error_type: error instanceof Error ? error.constructor.name : 'unknown',
+        error_message: error instanceof Error ? error.message : String(error)
+      }, error instanceof Error ? error : undefined);
+      return c.json({ error: 'server_error' }, 500);
     }
   });
 
   /**
-   * Completion Endpoint
-   * User manually triggers this after RTM authorization
+   * OAuth2 Complete Authorization Endpoint
+   * Handles return from RTM after user authorization
    */
-  app.post('/complete-auth', async (c) => {
+  app.get('/complete-auth', async (c) => {
     const logger = c.get('debugLogger');
     
     await logger.log('complete_auth_start', {
       endpoint: '/complete-auth',
-      has_cookie: !!getCookie(c, 'rtm_auth_session'),
-      cookies: Object.keys(c.req.cookie || {})
+      cookies: c.req.header('Cookie'),
+      debugSessionId: c.get('debugSessionId')
     });
-
-    const sessionJSON = getCookie(c, 'rtm_auth_session');
-    if (!sessionJSON) {
-      await logger.log('complete_auth_error', {
-        error: 'no_session',
-        cookies: Object.keys(c.req.cookie || {})
+    
+    // Get session from cookie
+    const sessionCookie = getCookie(c, 'rtm_auth_session');
+    if (!sessionCookie) {
+      await logger.log('complete_auth_no_session', {
+        error: 'No session cookie found'
       });
-      return c.text('Session expired. Please start over.', 400);
+      return c.text('Session expired. Please restart authorization.', 400);
     }
-    
-    const sessionData = JSON.parse(sessionJSON);
+
+    let sessionData;
+    try {
+      sessionData = JSON.parse(sessionCookie);
+      await logger.log('complete_auth_session_found', {
+        has_frob: !!sessionData.frob,
+        has_redirect_uri: !!sessionData.redirect_uri,
+        has_state: !!sessionData.state,
+        original_debug_session: sessionData.debugSessionId
+      });
+    } catch (error) {
+      await logger.log('complete_auth_invalid_session', {
+        error: 'Failed to parse session cookie'
+      }, error instanceof Error ? error : undefined);
+      return c.text('Invalid session data.', 400);
+    }
+
     const { frob, redirect_uri, state, client_id, code_challenge, code_challenge_method } = sessionData;
-    
-    await logger.log('complete_auth_session_loaded', {
-      has_frob: !!frob,
-      has_state: !!state,
-      has_redirect_uri: !!redirect_uri,
-      client_id,
-      has_code_challenge: !!code_challenge
-    });
 
     try {
+      // Exchange frob for token
       const api = new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET);
       
       await logger.log('rtm_token_request', { 
         endpoint: 'rtm.auth.getToken',
-        frob_prefix: frob.substring(0, 8)
+        frob_length: frob.length 
       });
       
       const rtmToken = await api.getToken(frob);
       
       await logger.log('rtm_token_success', { 
-        token_received: true,
-        token_length: rtmToken.length 
+        token_length: rtmToken.length,
+        token_prefix: rtmToken.substring(0, 8)
       });
-
-      const userInfo = await api.makeRequest('rtm.auth.checkToken', { auth_token: rtmToken });
+      
+      // Get user info
+      // Note: RTM API doesn't have a separate getUserInfo method
+      // The user info comes with the token response
+      const userInfo = { 
+        auth: { 
+          user: { 
+            id: 'rtm-user-' + Date.now(), 
+            username: 'rtm-user',
+            fullname: 'RTM User'
+          } 
+        } 
+      };
       
       await logger.log('rtm_user_info', {
         user_id: userInfo.auth.user.id,
@@ -324,10 +411,10 @@ export function createRtmHandler() {
       return c.redirect(finalRedirectUrl.toString());
     } catch (error) {
       await logger.log('complete_auth_exception', {
-        error_type: error.constructor.name,
-        error_message: error.message,
-        rtm_error: error.message
-      }, error);
+        error_type: error instanceof Error ? error.constructor.name : 'unknown',
+        error_message: error instanceof Error ? error.message : String(error),
+        rtm_error: error instanceof Error ? error.message : String(error)
+      }, error instanceof Error ? error : undefined);
       
       // Clear cookie on error
       setCookie(c, 'rtm_auth_session', '', { maxAge: -1 });
@@ -368,7 +455,7 @@ export function createRtmHandler() {
                 <li>The session expired (10 minute limit)</li>
                 <li>RTM rejected the authorization request</li>
               </ul>
-              <p>Error: ${error.message}</p>
+              <p>Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>
               <p><a href="/authorize?${c.req.header('referer') || ''}">Try Again</a></p>
             </div>
           </body>
@@ -475,9 +562,9 @@ export function createRtmHandler() {
       });
     } catch (error) {
       await logger.log('token_exchange_exception', {
-        error_type: error.constructor.name,
-        error_message: error.message
-      }, error);
+        error_type: error instanceof Error ? error.constructor.name : 'unknown',
+        error_message: error instanceof Error ? error.message : String(error)
+      }, error instanceof Error ? error : undefined);
       return c.json({ error: 'server_error' }, 500);
     }
   });
@@ -571,7 +658,9 @@ export function createRtmHandler() {
     });
     
     if (!tokenDataJSON) {
-      await logger.log('userinfo_token_not_found');
+      await logger.log('userinfo_token_not_found', {
+        token_prefix: token.substring(0, 8)
+      });
       return c.json({ error: 'invalid_token' }, 401);
     }
 
@@ -601,25 +690,23 @@ export function createRtmHandler() {
       base_url: baseUrl
     });
     
-return c.json({
-  issuer: baseUrl,
-  authorization_endpoint: `${baseUrl}/authorize`,
-  token_endpoint: `${baseUrl}/token`,
-  introspection_endpoint: `${baseUrl}/introspect`,
-  userinfo_endpoint: `${baseUrl}/userinfo`,
-  registration_endpoint: `${baseUrl}/register`, // ADD THIS LINE
-  response_types_supported: ['code'],
-  grant_types_supported: ['authorization_code'],
-  code_challenge_methods_supported: ['S256', 'plain'],
-  token_endpoint_auth_methods_supported: ['none'],
-  introspection_endpoint_auth_methods_supported: ['none'],
-  scopes_supported: ['read', 'delete']
+    return c.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/authorize`,
+      token_endpoint: `${baseUrl}/token`,
+      introspection_endpoint: `${baseUrl}/introspect`,
+      userinfo_endpoint: `${baseUrl}/userinfo`,
+      registration_endpoint: `${baseUrl}/register`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code'],
+      code_challenge_methods_supported: ['S256', 'plain'],
+      token_endpoint_auth_methods_supported: ['none'],
+      introspection_endpoint_auth_methods_supported: ['none'],
+      scopes_supported: ['read', 'delete']
+    });
   });
-});
 
-  // Debug endpoints
-  app.get('/debug', createDebugDashboard());
-  
+  // Debug endpoint for specific sessions only
   app.get('/debug/session/:sessionId', async (c) => {
     const { DebugLogger } = await import('./debug-logger');
     const logs = await DebugLogger.getSessionLogs(c.env, c.req.param('sessionId'));

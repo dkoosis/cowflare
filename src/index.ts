@@ -1,47 +1,60 @@
-// File: src/index.ts
+/**
+ * @file src/index.ts
+ * @description Main entry point for the Cowflare RTM MCP worker.
+ * This file sets up the Hono web server, configures middleware for logging and
+ * CORS, and defines all the necessary routes for the MCP protocol,
+ * authentication, health checks, and debugging.
+ */
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { getCookie, setCookie } from 'hono/cookie';
 import { RtmMCP } from './rtm-mcp';
+import { withDebugLogging, DebugLogger, createDebugDashboard } from './debug-logger';
 import { createRtmHandler } from './rtm-handler';
-import { withDebugLogging, createDebugDashboard } from './debug-logger';
 import type { Env } from './types';
 
-// --- Variable Declarations ---
+// --- Constants and Configuration ---
 
 /**
- * The deployment name and timestamp, displayed in various locations
- * such as the debug dashboard and health check endpoint.
- * These values are replaced at build time.
- */
-const DEPLOYMENT_NAME = '__DEPLOYMENT_NAME__';
-const DEPLOYMENT_TIME_MODULE = '__DEPLOYMENT_TIME__';
-
-// --- Type Definitions ---
-
-/**
- * Define custom variables available in Hono context.
- * This ensures TypeScript knows about our custom properties.
+ * A type definition for Hono's context variables, ensuring type safety
+ * for custom middleware values like the debug logger.
  */
 type Variables = {
-  debugLogger: any;
+  debugLogger: DebugLogger;
   debugSessionId: string;
 };
 
-// --- Application Setup ---
+/**
+ * Generates a memorable, human-readable name for each deployment instance
+ * based on the current time, aiding in identifying specific worker versions.
+ * @returns A string in the format "adjective-animal".
+ */
+const generateDeploymentName = (): string => {
+  const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
+  const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
+  const now = Date.now();
+  const adjIndex = Math.floor((now / 1000) % adjectives.length);
+  const animalIndex = Math.floor((now / 100000) % animals.length);
+  return `${adjectives[adjIndex]}-${animals[animalIndex]}`;
+};
+
+const DEPLOYMENT_NAME = generateDeploymentName();
+const DEPLOYMENT_TIME_MODULE = new Date().toISOString();
+
+console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME_MODULE}`);
+
+// --- Hono App Initialization ---
 
 /**
- * Main Hono application instance with proper typing.
- * This handles all HTTP routing for our MCP server.
+ * The main Hono application instance.
+ * It's typed with the environment bindings (`Env`) and custom variables (`Variables`)
+ * to provide end-to-end type safety.
  */
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// --- Middleware Setup ---
+// --- Middleware Configuration ---
 
-/**
- * Apply debug logging middleware to all routes.
- * This creates a debug session and logger for each request.
- */
+// Apply the debug logging middleware to all incoming requests.
 app.use('*', withDebugLogging);
 
 // Apply CORS middleware to allow requests from authorized origins like Claude.ai.
