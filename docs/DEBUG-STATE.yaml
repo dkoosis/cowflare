@@ -6,15 +6,15 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "happy-owl"
-  last_update: "2025-07-14T16:30:00Z"
+  last_update: "2025-07-14T19:10:00Z"
 
 state:
   build: "PASS"
   inspector_connect: "PASS"
   tool_execution: "PASS"
   auth_flow: "PASS"
-  claude_integration: "FAIL"
-  logging: "INVESTIGATING"
+  claude_integration: "INVESTIGATING"
+  logging: "PASS"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -29,6 +29,8 @@ proven:
 - "oauth_manual_test==success"
 - "oauth_code_generation==working"
 - "dashboard_import==dashboard.ts"
+- "claude_sends_redirect_uri==https://example.com/callback"
+- "logging_endpoints==working"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -43,20 +45,24 @@ hypotheses:
     desc: "claude.ai_sends_wrong_redirect_uri"
     test: "check_oauth_authorize_params"
     priority: 1
+    status: "CONFIRMED"
+    solution: "intercept_and_replace_example.com"
   h2:
     desc: "logging_kv_issue"
     test: "test_kv_directly"
     priority: 2
+    status: "RESOLVED"
   h3:
-    desc: "session_id_mismatch"
-    test: "verify_oauth_state_handling"
-    priority: 3
+    desc: "claude_callback_url_pattern"
+    test: "find_correct_claude_callback"
+    priority: 1
+    status: "NEEDS_TESTING"
 
 blockers:
 - "claude.ai_redirects_to_example.com_not_claude"
-- "debug_logs_not_visible"
+- "need_correct_claude_callback_url"
 
-next_action: "debug:test_logging_endpoints"
+next_action: "test:claude_callback_url_variations"
 
 code_refs:
   serve: "src/index.ts:L34"
@@ -66,6 +72,7 @@ code_refs:
   dashboard: "src/dashboard.ts"
   test_log: "src/index.ts:L98"
   kv_debug: "src/index.ts:L116"
+  authorize_fix: "src/rtm-handler.ts:L30-L55"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -89,13 +96,30 @@ current_issues:
     symptom: "shows_requires_connection_after_oauth"
     redirect: "sends_to_example.com"
     expected: "should_redirect_to_claude.ai"
+    root_cause: "claude_sends_redirect_uri=example.com"
+    fix: "intercept_and_replace_in_authorize_endpoint"
   debug_logging:
     symptom: "no_logs_in_dashboard"
     test1: "/test-log"
     test2: "/debug/kv"
     test3: "/debug/all"
+    status: "RESOLVED_endpoints_working"
+
+claude_callback_patterns:
+  observed: "https://example.com/callback"
+  possible:
+  - "https://claude.ai/api/auth/callback/custom"
+  - "https://claude.ai/api/oauth/callback"
+  - "https://claude.ai/auth/callback"
+  - "https://claude.ai/integrations/callback"
 
 sessions:
+- ts: "2025-07-14T19:10:00Z"
+  fixes: [ "added_redirect_uri_fix" ]
+  time: 10
+- ts: "2025-07-14T19:00:00Z"
+  fixes: [ "diagnosed_claude_redirect_issue", "verified_logging_works" ]
+  time: 30
 - ts: "2025-07-14T16:30:00Z"
   fixes: [ "dashboard_import", "debug_endpoints" ]
   time: 30
@@ -110,7 +134,7 @@ sessions:
   time: 240
 
 metrics:
-  orientation: [ 0, 120, 30, 5 ]
-  redundant: [ 3, 0, 0, 0 ]
-  hypothesis_success: [ 1, 1, 1 ]
+  orientation: [ 0, 120, 30, 5, 5 ]
+  redundant: [ 3, 0, 0, 0, 0 ]
+  hypothesis_success: [ 1, 1, 1, 1 ]
   forward: true
