@@ -276,6 +276,56 @@ app.get('/debug/kv', async (c) => {
   }
 });
 
+// Add this endpoint to src/index.ts after the existing debug endpoints
+
+/**
+ * Emergency cleanup endpoint for when KV limits are hit
+ * Deletes old debug logs while preserving recent auth data
+ */
+app.get('/debug/cleanup', async (c) => {
+  try {
+    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
+    let deletedCount = 0;
+    
+    // List all debug entries
+    const debugList = await c.env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
+    
+    for (const key of debugList.keys) {
+      // Extract timestamp from key: debug:${timestamp}_${sessionId}_${event}
+      const parts = key.name.split(':')[1]?.split('_');
+      if (parts && parts[0]) {
+        const timestamp = parseInt(parts[0]);
+        
+        // Delete if older than cutoff
+        if (timestamp < cutoffTime) {
+          await c.env.AUTH_STORE.delete(key.name);
+          deletedCount++;
+        }
+      }
+    }
+    
+    // Also clean up old protocol logs
+    const protocolList = await c.env.AUTH_STORE.list({ prefix: 'protocol:', limit: 500 });
+    for (const key of protocolList.keys) {
+      // Protocol logs can be more aggressively cleaned
+      await c.env.AUTH_STORE.delete(key.name);
+      deletedCount++;
+    }
+    
+    return c.json({
+      success: true,
+      deleted: deletedCount,
+      message: `Deleted ${deletedCount} old log entries`,
+      cutoff: new Date(cutoffTime).toISOString()
+    });
+  } catch (error) {
+    return c.json({
+      error: 'Cleanup failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
 // --- Exports ---
 
 /**

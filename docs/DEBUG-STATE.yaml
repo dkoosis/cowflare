@@ -5,16 +5,16 @@
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "happy-owl"
-  last_update: "2025-07-14T19:10:00Z"
+  deployment: "graceful-eagle"
+  last_update: "2025-07-14T19:45:00Z"
 
 state:
   build: "PASS"
   inspector_connect: "PASS"
   tool_execution: "PASS"
   auth_flow: "PASS"
-  claude_integration: "INVESTIGATING"
-  logging: "PASS"
+  claude_integration: "PARTIAL"
+  logging: "FAIL_KV_LIMIT"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -31,6 +31,8 @@ proven:
 - "dashboard_import==dashboard.ts"
 - "claude_sends_redirect_uri==https://example.com/callback"
 - "logging_endpoints==working"
+- "claude_shows_connected_popup==true"
+- "oauth_completes_successfully==true"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -114,6 +116,9 @@ claude_callback_patterns:
   - "https://claude.ai/integrations/callback"
 
 sessions:
+- ts: "2025-07-14T19:45:00Z"
+  fixes: [ "kv_limit_diagnosed", "cleanup_endpoint_added" ]
+  time: 15
 - ts: "2025-07-14T19:10:00Z"
   fixes: [ "added_redirect_uri_fix" ]
   time: 10
