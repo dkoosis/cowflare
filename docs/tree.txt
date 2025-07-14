@@ -1,5 +1,6 @@
 .
 ├── claude_cleaned.json
+├── dlogs.sh
 ├── docs
 │   ├── _index.md
 │   ├── adr-architecture-core.md
@@ -51,4 +52,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 46 files
+6 directories, 47 files
