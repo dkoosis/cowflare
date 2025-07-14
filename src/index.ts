@@ -32,7 +32,7 @@ type Variables = {
  */
 const generateDeploymentName = (): string => {
   const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
-  const animals = ['tiger', 'eagle', 'wolf', 'hawk', 'fox', 'bear', 'frog', 'lion', 'owl', 'deer', 'lynx', 'bear', 'puma', 'otter', 'seal', 'whale', 'dolphin', 'shark', 'penguin', 'rabbit', 'squirrel'];
+  const animals = ['Holstein', 'Jersey', 'Angus', 'Guernsey', 'milk', 'butter', 'cheese', 'cream', 'moo', 'Elsie', 'Clarabelle', 'Ayrshire', 'Brown Swiss', 'Hereford', 'Wagyu', 'Babe the Blue Ox', 'Ferdinand', 'Minnie Moo', 'Pauline Wayne', "Mrs. O'Leary", 'Simmental'];
   const now = Date.now();
   const adjIndex = Math.floor((now / 1000) % adjectives.length);
   const animalIndex = Math.floor((now / 100000) % animals.length);
