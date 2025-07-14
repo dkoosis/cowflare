@@ -125,6 +125,31 @@ app.get('/debug', (c) => {
   return createDebugDashboard(deploymentName, deploymentTime)(c);
 });
 
+// Add this route to src/index.ts after the existing /debug route
+
+/**
+ * Debug endpoint to view ALL logs (not just OAuth flows)
+ * Temporary endpoint for debugging
+ */
+app.get('/debug/all', async (c) => {
+  const logs = await DebugLogger.getRecentLogs(c.env, 50); // Get last 50 logs
+  
+  // Group by session ID
+  const grouped = logs.reduce((acc, log) => {
+    if (!acc[log.sessionId]) {
+      acc[log.sessionId] = [];
+    }
+    acc[log.sessionId].push(log);
+    return acc;
+  }, {} as Record<string, DebugEvent[]>);
+  
+  return c.json({
+    total: logs.length,
+    sessions: Object.keys(grouped).length,
+    logs: grouped
+  });
+});
+
 /**
  * The health check endpoint.
  * Provides metadata about the running service, including its version, deployment
