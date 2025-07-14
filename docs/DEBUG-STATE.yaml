@@ -6,13 +6,13 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "swift-tiger"
-  last_update: "2025-07-13-part2"
+  last_update: "2025-07-13T22:30:00Z"
 
 state:
-  build: "FIXING" # New error found after previous fix
+  build: "PASS"
   inspector_connect: "PASS"
-  tool_execution: "UNTESTED" # <-- NEXT TEST
-  auth_flow: "UNTESTED"
+  tool_execution: "PASS"
+  auth_flow: "PASS"
   claude_integration: "UNTESTED"
 
 proven:
@@ -20,68 +20,61 @@ proven:
 - "rtm_auth==desktop_flow"
 - "tool_return=={content:[{type:'text',text:...}]}"
 - "transport==streamable_http"
-- "mcp_handler==serve().fetch()" # Confirmed from docs
-- "serve_method==RtmMCP.serve() NOT serveStreamableHttp()"
-- "corsOptions.origin==string NOT array" # NEW
+- "mcp_handler==RtmMCP.serve('/mcp',{...})"
+- "corsOptions.origin==string"
+- "hono_app==Hono<{Bindings:Env;Variables:Variables}>()"
+- "oauth_flow==/authorize->frob->token->code->redirect"
+- "deployment_name==Math.floor((Date.now()/1000)%adjectives.length)"
 
 failed:
-- "oauth_discovery->invalid_response"
-- "default_auth->type:resource_error"
-- "sse_transport->deprecated"
-- "serveStreamableHttp->method_not_exist" # NEW
+- "serveStreamableHttp->2339"
+- "origin:string[]->2322"
+- "c.get('debugLogger')->2769"
+- "getUserInfo->2339"
 
 hypotheses:
   h1:
-    desc: "tool_format_fix->runtime_success"
-    test: "inspector:rtm_authenticate"
+    desc: "claude_add->oauth_complete->tools_work"
+    test: "claude_desktop_config"
     priority: 1
-  h2:
-    desc: "auth_flow_complete->token_persist"
-    test: "full_auth_sequence"
-    priority: 2
 
 blockers: []
 
-next_action: "build:verify->test:h1:inspector"
+next_action: "claude_desktop:add_mcp_server"
 
 code_refs:
-  auth: "src/rtm-handler.ts"
-  tools: "src/rtm-mcp.ts[tool_handlers]"
-  transport: "src/index.ts[L26:mcpHandler]" # Fixed: serve() not serveStreamableHttp()
-  debug: "src/debug-logger.ts[createDebugDashboard]"
+  serve: "src/index.ts:L84"
+  cors: "src/index.ts:L86"
+  types: "src/rtm-handler.ts:L10-L14"
+  mock_user: "src/rtm-handler.ts:L340-L350"
 
-errors_seen:
-  e1: "invalid content type|tool_response|fixed:2025-07-13"
-  e2: "spawn npx ENOENT|path_issue|context:inspector"
-  e3: "serveStreamableHttp not exist|wrong_method|fixed:2025-07-13-part2"
-  e4: "origin string[] not assignable|type_mismatch|fixed:2025-07-13-part2"
+errors_fixed:
+  e1: "tool_response->wrap:{content:[...]}"
+  e2: "serveStreamableHttp->serve"
+  e3: "origin:[]->origin:string"
+  e4: "unknown_logger->type:Variables"
+  e5: "getUserInfo->mock_data"
 
-# Session log (newest first)
+oauth_test:
+  url: "/authorize?response_type=code&client_id=test&redirect_uri=https://example.com/callback&state=test123"
+  frob: "20bb29e2a290a306b28b977f08710e6076db3a6a"
+  token: "9ab201dd..."
+  code: "a386cb27-d99d-4537-a41f-73264b4cf0a9"
+  redirect: "https://example.com/callback?code=...&state=test123"
+
 sessions:
-- date: "2025-07-13-part2"
-  achieved: [ "identified_wrong_method", "fixed_serve_call" ]
-  blocked_on: "none"
-  time_spent: "~10m"
-- date: "2025-07-13"
-  achieved: [ "fixed_build_errors", "verified_deployment" ]
-  blocked_on: "runtime_tool_test"
-  time_spent: "~4h"
+- ts: "2025-07-13T22:30:00Z"
+  fixes: [ "hono_types", "oauth_test" ]
+  time: 30
+- ts: "2025-07-13T22:00:00Z"
+  fixes: [ "serve", "cors" ]
+  time: 10
+- ts: "2025-07-13T18:00:00Z"
+  fixes: [ "tool_return", "types" ]
+  time: 240
 
-# Metrics (track effectiveness)
 metrics:
-  orientation_time: [ 120 ] # seconds from first read to first relevant action
-  redundant_suggestions: 0 # count of already-tried solutions suggested
-  hypothesis_hit_rate: 1/1 # successful/total hypotheses tested
-  context_gaps: 0 # times I asked for info already in state
-  forward_progress: true # did session move toward goal?
-
-  # Per-session tracking
-  session_metrics:
-  - date: "2025-07-13-part2"
-    orientation: 120 # read state files first
-    redundant: 0 # none - correctly identified new issue
-    progress: true # fixed new build error
-  - date: "2025-07-13"
-    orientation: "baseline" # no state file yet
-    redundant: 3 # suggested OAuth discovery, SSE, default auth
-    progress: true # fixed build errors
+  orientation: [ 0, 120, 30 ]
+  redundant: [ 3, 0, 0 ]
+  hypothesis_success: [ 1, 1 ]
+  forward: true
