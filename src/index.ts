@@ -38,10 +38,18 @@ const generateDeploymentName = (): string => {
   return `${adjectives[adjIndex]}-${animals[animalIndex]}`;
 };
 
-const DEPLOYMENT_NAME = generateDeploymentName();
-const DEPLOYMENT_TIME_MODULE = new Date().toISOString();
+let deploymentName: string | null = null;
+let deploymentTime: string | null = null;
 
-console.log(`🚀 Deployment: ${DEPLOYMENT_NAME} at ${DEPLOYMENT_TIME_MODULE}`);
+const getDeploymentInfo = () => {
+  // Only generate the name and time on the first call
+  if (!deploymentName || !deploymentTime) {
+    deploymentName = generateDeploymentName();
+    deploymentTime = new Date().toISOString();
+    console.log(`🚀 Initialized Deployment: ${deploymentName} at ${deploymentTime}`);
+  }
+  return { deploymentName, deploymentTime };
+};
 
 // --- Hono App Initialization ---
 
@@ -111,8 +119,10 @@ app.all('/mcp/*', (c) => {
  * Provides a web interface to view live logs and transaction history.
  */
 app.get('/debug', (c) => {
+  // Get the lazily-initialized deployment info
+  const { deploymentName, deploymentTime } = getDeploymentInfo();
   // Pass deployment info to the dashboard for display in the banner.
-  return createDebugDashboard(DEPLOYMENT_NAME, DEPLOYMENT_TIME_MODULE)(c);
+  return createDebugDashboard(deploymentName, deploymentTime)(c);
 });
 
 /**
@@ -121,6 +131,9 @@ app.get('/debug', (c) => {
  * name, and a check of which McpAgent methods are available.
  */
 app.get('/health', (c) => {
+  // Get the lazily-initialized deployment info
+  const { deploymentName, deploymentTime } = getDeploymentInfo();
+
   const mcpMethods = {
     hasServe: typeof (RtmMCP as any).serve === 'function',
     hasServeSSE: typeof (RtmMCP as any).serveSSE === 'function',
@@ -132,10 +145,10 @@ app.get('/health', (c) => {
     status: 'ok',
     service: 'rtm-mcp-server',
     version: '2.5.0',
-    deployment_name: DEPLOYMENT_NAME,
+    deployment_name: deploymentName,
     transport: 'streamable-http',
     mcp_compliant: mcpMethods.hasServe, // Dynamically check compliance
-    deployed_at: DEPLOYMENT_TIME_MODULE,
+    deployed_at: deploymentTime,
     mcp_methods: mcpMethods
   });
 });

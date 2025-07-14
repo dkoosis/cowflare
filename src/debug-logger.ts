@@ -86,14 +86,43 @@ export class DebugLogger {
       }
     });
   }
+  
+  /**
+   * OPTIMIZED: Implements "Find, Then Fetch" strategy for the debug dashboard.
+   * It finds the most recent flows and only then fetches the data for them.
+   * @param env The environment object.
+   * @param flowCount The number of complete flows to retrieve.
+   */
+  static async getRecentFlowLogs(env: Env, flowCount: number = 2): Promise<DebugEvent[]> {
+    // 1. Lightweight Scan: Get the names of recent logs.
+    const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 250 });
+    // Manually sort keys reverse-chronologically since the `reverse` option is not in the type definition.
+    list.keys.sort((a, b) => b.name.localeCompare(a.name));
 
-  static async getRecentLogs(env: Env, limit: number = 100): Promise<DebugEvent[]> {
-    // Note: This list operation has a maximum limit of 1000 keys per call.
-    // For systems with very high log volume, pagination would be required.
-    const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
-    const events: DebugEvent[] = [];
-    
+    // 2. Find Target Flows: Identify the session IDs of the most recent OAuth flows.
+    const targetFlowSessionIds = new Set<string>();
     for (const key of list.keys) {
+      const parts = key.name.split('_');
+      // Key format: debug:${timestamp}_${sessionId}_${event}
+      if (parts.length > 1) {
+        const sessionId = parts[1];
+        if (sessionId.startsWith('oauth_') || sessionId.startsWith('auth_')) {
+          targetFlowSessionIds.add(sessionId);
+          if (targetFlowSessionIds.size >= flowCount) {
+            break; // Stop once we've found enough flows.
+          }
+        }
+      }
+    }
+    
+    // 3. Targeted Fetch: Filter the key list and fetch data only for the target flows.
+    const keysToFetch = list.keys.filter(key => {
+      const parts = key.name.split('_');
+      return parts.length > 1 && targetFlowSessionIds.has(parts[1]);
+    });
+    
+    const events: DebugEvent[] = [];
+    for (const key of keysToFetch) {
       const data = await env.AUTH_STORE.get(key.name);
       if (data) {
         events.push(JSON.parse(data));
@@ -102,7 +131,24 @@ export class DebugLogger {
     
     events.sort((a, b) => b.timestamp - a.timestamp);
     
-    return events.slice(0, limit);
+    return events;
+  }
+
+  static async getRecentLogs(env: Env, limit: number = 100): Promise<DebugEvent[]> {
+    const list = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
+    list.keys.sort((a, b) => b.name.localeCompare(a.name));
+    
+    const events: DebugEvent[] = [];
+    const limitedKeys = list.keys.slice(0, limit);
+
+    for (const key of limitedKeys) {
+      const data = await env.AUTH_STORE.get(key.name);
+      if (data) {
+        events.push(JSON.parse(data));
+      }
+    }
+    events.sort((a, b) => b.timestamp - a.timestamp);
+    return events;
   }
 
   static async getSessionLogs(env: Env, sessionId: string): Promise<DebugEvent[]> {
@@ -110,17 +156,10 @@ export class DebugLogger {
     return allLogs.filter(log => log.sessionId === sessionId);
   }
 
-  /**
-   * Deletes all logs associated with a set of session IDs.
-   * This is inefficient due to the 'debug:' key structure, requiring a broad list and filter operation.
-   * @param env - The environment object with the AUTH_STORE.
-   * @param sessionIds - An array of session IDs whose logs should be deleted.
-   */
   static async deleteFlowLogs(env: Env, sessionIds: string[]): Promise<{ deleted: number }> {
     const keysToDelete = new Set<string>();
     const sessionSet = new Set(sessionIds);
 
-    // List recent debug logs and filter for keys belonging to the target sessions
     const debugList = await env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
     for (const key of debugList.keys) {
       const parts = key.name.split('_');
@@ -129,7 +168,6 @@ export class DebugLogger {
       }
     }
 
-    // List and add protocol logs for deletion
     for (const sessionId of sessionIds) {
       const protocolList = await env.AUTH_STORE.list({ prefix: `protocol:${sessionId}` });
       for (const key of protocolList.keys) {
@@ -139,8 +177,6 @@ export class DebugLogger {
 
     const uniqueKeys = Array.from(keysToDelete);
     
-    // The KV `delete` method in this environment only accepts a single key,
-    // so we must iterate. A bulk delete is not supported.
     let deleted = 0;
     for (const key of uniqueKeys) {
       await env.AUTH_STORE.delete(key);
@@ -205,30 +241,15 @@ export const withDebugLogging = async (c: any, next: any) => {
 // Debug dashboard 
 /*
   TODO: For the delete functionality to work, you must create an API endpoint.
-  This endpoint should handle a POST request, parse the `sessionIds` from the body,
-  and call the `DebugLogger.deleteFlowLogs` static method.
-
-  Example (using Hono router):
-  app.post('/debug/delete', async (c) => {
-    try {
-      const { sessionIds } = await c.req.json();
-      if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
-        return c.json({ error: 'Invalid request body' }, 400);
-      }
-      const result = await DebugLogger.deleteFlowLogs(c.env, sessionIds);
-      return c.json(result);
-    } catch (e) {
-      console.error('Failed to delete logs:', e);
-      return c.json({ error: 'Failed to delete logs' }, 500);
-    }
-  });
+  ...
 */
 export function createDebugDashboard(deploymentName?: string, deploymentTime?: string) {
   return async (c: any) => {
     const { DebugLogger } = await import('./debug-logger');
     const { ProtocolLogger } = await import('./protocol-logger');
     
-    const logs = await DebugLogger.getRecentLogs(c.env, 500);
+    // OPTIMIZED: Call the new efficient method to get only the last 2 flows.
+    const logs = await DebugLogger.getRecentFlowLogs(c.env, 2);
     
     const correlateFlows = (events: DebugEvent[]) => {
       const flows = new Map<string, {
@@ -248,9 +269,8 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
       }>();
 
       events.forEach(event => {
-        const flowKey = event.sessionId.startsWith('oauth_') ? event.sessionId : 
-                       event.sessionId.startsWith('auth_') ? event.sessionId : 
-                       event.sessionId;
+        // Group all events by their session ID to form a "flow"
+        const flowKey = event.sessionId;
         
         if (!flows.has(flowKey)) {
           flows.set(flowKey, {
@@ -270,7 +290,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
 
         const flow = flows.get(flowKey)!;
         flow.events.push(event);
-        flow.relatedSessions.add(event.sessionId);
         
         if (event.timestamp < flow.startTime) flow.startTime = event.timestamp;
         if (event.timestamp > flow.endTime) flow.endTime = event.timestamp;
@@ -311,7 +330,7 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
           const txs = await ProtocolLogger.getSessionTransactions(c.env, sessionId);
           flow.protocolLogs.push(...txs);
         } catch (e) {
-          // Ignore errors if protocol logs for a session can't be fetched
+          // Ignore errors
         }
       }
     }
@@ -380,7 +399,7 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
           ` : ''}
           
           <div class="subtitle">
-            Correlated OAuth flows (${oauthFlows.length} flows from ${logs.length} events)
+            Displaying the ${oauthFlows.length} most recent OAuth flows (from ${logs.length} total events).
           </div>
           
           <div class="controls">
@@ -455,7 +474,6 @@ export function createDebugDashboard(deploymentName?: string, deploymentTime?: s
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Use string concatenation to avoid nested template literal issues.
             a.download = 'flow-' + primarySessionId + '-logs.json';
             document.body.appendChild(a);
             a.click();
