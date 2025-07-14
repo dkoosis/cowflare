@@ -25,6 +25,7 @@
 │   ├── TODO.md
 │   └── tree.txt
 ├── inspector-config.json
+├── inspector.log
 ├── out.txt
 ├── package.json
 ├── README.md
@@ -44,6 +45,7 @@
 │   │   └── utility-schemas.ts
 │   ├── types.ts
 │   └── utils.ts
+├── tail.log
 ├── test
 │   ├── env.d.ts
 │   └── index.spec.ts
@@ -52,4 +54,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 47 files
+6 directories, 49 files

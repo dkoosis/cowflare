@@ -1,4 +1,5 @@
-// File: src/dashboard.ts
+// Update src/dashboard.ts with this complete fixed version:
+
 export default `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,32 +18,33 @@ export default `<!DOCTYPE html>
       button { background: #2d2d2d; color: #e0e0e0; border: 1px solid #444; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
       button:hover { background: #3d3d3d; }
       .session-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; transition: opacity 0.3s ease; }
+      .session-card.fade-out { opacity: 0; }
       .session-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; cursor: pointer; }
-      .session-title-group { display: flex; flex-direction: column; gap: 5px; }
+      .session-title-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
       .session-title { font-size: 18px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 10px; }
-      .session-meta { font-size: 12px; color: #666; display: flex; gap: 15px; }
-      .status-indicator { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+      .session-meta { font-size: 12px; color: #888; display: flex; gap: 15px; margin-top: 5px; }
+      .session-actions { display: flex; gap: 8px; }
+      .status-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
       .status-success { background: #10b981; }
       .status-warning { background: #f59e0b; }
       .status-error { background: #ef4444; }
       .status-neutral { background: #6b7280; }
-      .event-list { display: none; }
+      .mcp-session-id { font-size: 12px; color: #8b5cf6; font-family: monospace; }
+      .event-list { margin-top: 15px; display: none; }
       .event-list.expanded { display: block; }
-      .event-item { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 4px; padding: 12px; margin-bottom: 8px; font-family: 'Menlo', 'Monaco', monospace; font-size: 12px; }
-      .event-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+      .event-item { background: #262626; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 12px; border: 1px solid #333; }
+      .event-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
       .event-type { color: #60a5fa; font-weight: bold; }
-      .event-time { color: #666; }
-      .event-data { background: #1a1a1a; padding: 8px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; overflow-x: auto; }
-      .event-error { background: #7f1d1d; border: 1px solid #dc2626; margin-top: 8px; }
-      .protocol-section { background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 4px; padding: 12px; margin-top: 15px; }
-      .protocol-header { color: #8b5cf6; font-weight: bold; margin-bottom: 10px; }
-      .transaction-item { background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 10px; margin-bottom: 8px; }
-      .message-content { background: #262626; padding: 8px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; font-size: 11px; }
-      .fade-out { opacity: 0.3; }
-      code { background: #2d2d2d; padding: 2px 4px; border-radius: 3px; }
-      .mcp-session-id { color: #8b5cf6; font-weight: bold; font-family: monospace; }
-      .chevron { display: inline-block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid #666; margin-right: 8px; transition: transform 0.3s ease; }
-      .chevron.expanded { transform: rotate(180deg); }
+      .event-time { color: #666; font-size: 11px; }
+      .event-data { font-family: monospace; white-space: pre-wrap; background: #1a1a1a; padding: 8px; border-radius: 4px; margin-top: 5px; border: 1px solid #333; max-height: 300px; overflow-y: auto; }
+      .event-error { background: #2a1515; border-color: #5a2020; color: #ff8888; }
+      .protocol-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #333; }
+      .protocol-header { font-size: 14px; font-weight: bold; color: #8b5cf6; margin-bottom: 10px; }
+      .transaction-item { background: #262626; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 12px; border: 1px solid #4a4a4a; }
+      .message-content { font-family: monospace; white-space: pre-wrap; background: #1a1a1a; padding: 8px; border-radius: 4px; border: 1px solid #333; max-height: 200px; overflow-y: auto; }
+      .chevron { display: inline-block; width: 16px; height: 16px; margin-right: 5px; transition: transform 0.2s; }
+      .chevron::before { content: '▶'; }
+      .chevron.expanded { transform: rotate(90deg); }
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-track { background: #1a1a1a; }
       ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
@@ -79,6 +81,20 @@ export default `<!DOCTYPE html>
             });
         }
         
+        function exportFlow(sessionId) {
+            const flow = flowData.find(f => f.primarySessionId === sessionId);
+            if (flow) {
+                const dataStr = JSON.stringify(flow, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = \`flow-\${sessionId}-\${Date.now()}.json\`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+            }
+        }
+        
         function render() {
             // Render Deployment Banner
             const deploymentInfo = document.getElementById('deployment-info');
@@ -105,14 +121,14 @@ export default `<!DOCTYPE html>
             } else {
                 flowsContainer.innerHTML = oauthFlows.map((flow, index) => \`
                 <div class="session-card" id="card-\${flow.primarySessionId}">
-                  <div class="session-header" onclick="toggleSession('\${flow.primarySessionId}')">
-                    <div class="session-title-group">
-                      <span class="status-indicator \${
-                        flow.hasMcpError ? 'status-error' :
-                        flow.hasMcpRequest && flow.hasMcpTransport ? 'status-success' :
-                        flow.hasToken ? 'status-warning' : 'status-neutral'
-                      }"></span>
+                  <div class="session-header">
+                    <div class="session-title-group" onclick="toggleSession('\${flow.primarySessionId}')">
                       <div class="session-title">
+                        <span class="status-indicator \${
+                          flow.hasMcpError ? 'status-error' :
+                          flow.hasMcpRequest && flow.hasMcpTransport ? 'status-success' :
+                          flow.hasToken ? 'status-warning' : 'status-neutral'
+                        }"></span>
                         <span class="chevron" id="chevron-\${flow.primarySessionId}"></span>
                         OAuth Flow #\${index + 1}
                         \${flow.mcpSessionId ? \`<span class="mcp-session-id">[\${flow.mcpSessionId}]</span>\` : ''}
@@ -125,6 +141,10 @@ export default `<!DOCTYPE html>
                         \${flow.hasMcpRequest ? '<span style="color: #10b981;">✓ MCP Request</span>' : ''}
                         \${flow.mcpTransportType ? \`<span style="color: #8b5cf6;">Transport: \${flow.mcpTransportType}</span>\` : ''}
                       </div>
+                    </div>
+                    <div class="session-actions">
+                      <button onclick="exportFlow('\${flow.primarySessionId}')">📥 Export</button>
+                      <button onclick="deleteFlows(['\${flow.primarySessionId}'])">🗑️ Delete</button>
                     </div>
                   </div>
                   <div class="event-list" id="events-\${flow.primarySessionId}">
@@ -236,8 +256,7 @@ export default `<!DOCTYPE html>
         // Initial render
         render();
         
-        // Auto-refresh every 5 seconds
-        setInterval(() => location.reload(), 5000);
+        // Removed auto-refresh - use manual refresh button instead
     </script>
 </body>
 </html>`;
