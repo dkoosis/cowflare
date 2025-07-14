@@ -1,0 +1,74 @@
+# MCP-DEBUG-STATE-V1
+# Machine-optimized debugging state for Claude
+# Update after each session with findings
+
+meta:
+  goal: "claude.ai->rtm_tasks"
+  endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
+  deployment: "swift-tiger"
+  last_update: "2025-07-13"
+
+state:
+  build: "PASS"
+  inspector_connect: "PASS"
+  tool_execution: "UNTESTED" # <-- NEXT TEST
+  auth_flow: "UNTESTED"
+  claude_integration: "UNTESTED"
+
+proven:
+- "rtm_auth!=oauth2_standard"
+- "rtm_auth==desktop_flow"
+- "tool_return=={content:[{type:'text',text:...}]}"
+- "transport==streamable_http"
+- "mcp_handler==serve().fetch()"
+
+failed:
+- "oauth_discovery->invalid_response"
+- "default_auth->type:resource_error"
+- "sse_transport->deprecated"
+
+hypotheses:
+  h1:
+    desc: "tool_format_fix->runtime_success"
+    test: "inspector:rtm_authenticate"
+    priority: 1
+  h2:
+    desc: "auth_flow_complete->token_persist"
+    test: "full_auth_sequence"
+    priority: 2
+
+blockers: []
+
+next_action: "test:h1:inspector"
+
+code_refs:
+  auth: "src/rtm-handler.ts"
+  tools: "src/rtm-mcp.ts[tool_handlers]"
+  transport: "src/index.ts[L26:mcpHandler]"
+  debug: "src/debug-logger.ts[createDebugDashboard]"
+
+errors_seen:
+  e1: "invalid content type|tool_response|fixed:2025-07-13"
+  e2: "spawn npx ENOENT|path_issue|context:inspector"
+
+# Session log (newest first)
+sessions:
+- date: "2025-07-13"
+  achieved: [ "fixed_build_errors", "verified_deployment" ]
+  blocked_on: "runtime_tool_test"
+  time_spent: "~4h"
+
+# Metrics (track effectiveness)
+metrics:
+  orientation_time: [] # seconds from first read to first relevant action
+  redundant_suggestions: 0 # count of already-tried solutions suggested
+  hypothesis_hit_rate: 0/0 # successful/total hypotheses tested
+  context_gaps: 0 # times I asked for info already in state
+  forward_progress: true # did session move toward goal?
+
+  # Per-session tracking
+  session_metrics:
+  - date: "2025-07-13"
+    orientation: "baseline" # no state file yet
+    redundant: 3 # suggested OAuth discovery, SSE, default auth
+    progress: true # fixed build errors

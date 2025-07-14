@@ -11,6 +11,7 @@
 │   ├── adr-platform-typescript.md
 │   ├── adr-practices-telemetry.md
 │   ├── cf_ag.ts
+│   ├── DEBUG-STATE.yaml
 │   ├── reference
 │   │   ├── cf_index.ts
 │   │   ├── cloudflare_agent.ts
@@ -48,4 +49,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 43 files
+6 directories, 44 files
