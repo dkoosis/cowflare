@@ -28,6 +28,7 @@
 ├── package.json
 ├── README.md
 ├── src
+│   ├── dashboard.txt
 │   ├── debug-logger.ts
 │   ├── index.ts
 │   ├── protocol-logger.ts
@@ -50,4 +51,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 45 files
+6 directories, 46 files
