@@ -1,19 +1,21 @@
 # MCP-DEBUG-STATE-V1
+# REMEMBER: PRESERVE VALUABLE EXPERIMENT RESULTS
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "strong-Minnie Moo"
-  last_update: "2025-07-15T16:45:00Z"
+  deployment: "clear-Holstein"
+  last_update: "2025-07-15T22:00:00Z"
 
 state:
   build: "PASS"
-  inspector_connect: "UNTESTED"
-  tool_execution: "UNTESTED"
+  inspector_connect: "PASS"
+  tool_execution: "PASS"
   auth_flow: "PASS"
   oauth_integration: "PASS"
   rtm_user_fetch: "PASS"
+  rtm_api_integration: "PASS"
   claude_integration: "UNTESTED"
-  mcp_connection: "UNTESTED"
+  mcp_connection: "PASS"
   logging: "PASS"
   rtm_mcp_protocol: "PASS"
   index_mcp_handler: "PASS"
@@ -47,6 +49,16 @@ proven:
 - "inline_schemas>missing_imports"
 - "rtm_api.getTasks()==implemented"
 - "rtm_api.addTask()==implemented"
+- "McpAgent.mount()->double_init_crash"
+- "RtmMCP.extends(DurableObject)->stable"
+- "InMemoryTransport->bridges_http_to_mcp_sdk"
+- "auth_bypass->enables_inspector_testing"
+- "X-RTM-Token_headers->pass_auth_to_DO"
+- "rtm_getTasks()->returns_real_data"
+- "inspector->connects_with_bearer_token"
+- "initialize->requires_clientInfo"
+- "/auth/complete-auth->correct_route"
+- "token:9ab201dd->David_Koosis_430794"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -60,18 +72,23 @@ failed:
 - "McpServer_import->agents/mcp"
 - "rtmGetTasksSchema->GetTasksSchema"
 - "server.setRequestHandler->server.tool"
+- "mcp_server_error->500->McpAgent_crash"
+- "DurableObject_not_defined->missing_global"
+- "McpServer.fetch()->method_not_exist"
+- "/complete-auth->404->missing_/auth_prefix"
+- "503_deployment_api->temporary_cf_issue"
 
 hypotheses:
   h1:
-    desc: "mcp_should_connect->test_inspector"
-    test: "npx @modelcontextprotocol/inspector"
+    desc: "claude_should_connect->with_correct_oauth"
+    test: "add_mcp_server_in_claude"
     priority: 1
   h2:
-    desc: "tools_execute->test_rtm_getTasks"
-    test: "inspector:rtm_getTasks"
+    desc: "remove_auth_bypass->production_ready"
+    test: "revert_line_107"
     priority: 2
 
-next_action: "deploy->test_inspector"
+next_action: "remove_auth_bypass->test_claude"
 
 code_refs:
   serve: "src/index.ts:L34"
@@ -83,6 +100,11 @@ code_refs:
   imports: "src/rtm-mcp.ts:L2-3"
   tool_reg: "src/rtm-mcp.ts:L69-180"
   inline_schemas: "src/rtm-mcp.ts:L86-91"
+  auth_bypass: "src/index.ts:L107-119"
+  rtm_mcp_fetch: "src/rtm-mcp.ts:L30-96"
+  in_memory_transport: "src/rtm-mcp.ts:L49-90"
+  oauth_fix: "src/rtm-handler.ts:L140"
+  debug_tokens: "src/index.ts:L195"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -100,6 +122,16 @@ errors_fixed:
   e13: "McpServer_import->sdk/server/mcp.js"
   e14: "missing_schemas->inline_definitions"
   e15: "setRequestHandler->server.tool"
+  e16: "double_init_crash->removed McpAgent.mount()"
+  e17: "mcp_handler_bug->refactored /mcp handler"
+  e18: "missing_dashboard->restored /debug route"
+  e19: "missing_healthcheck->added /health route"
+  e20: "createDebugDashboard_signature->fixed factory"
+  e21: "McpAgent_extends->removed_inheritance"
+  e22: "DurableObject_global->direct_class"
+  e23: "McpServer.fetch->InMemoryTransport"
+  e24: "requestBody_unknown->cast_JSONRPCMessage"
+  e25: "complete_auth_route->add_/auth_prefix"
 
 test_results:
   oauth: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
@@ -109,8 +141,20 @@ test_results:
   build: "PASS"
   mcp_handler_fix: "applied"
   rtm_mcp_fix: "applied"
+  inspector_connect: "PASS"
+  rtm_authenticate: '{"authenticated":true,"userName":"David Koosis","userId":"430794"}'
+  rtm_getLists: '{"lists":[]}'
+  rtm_getTasks: "PASS->returns_real_tasks"
+  token_storage: "PASS->9ab201dd"
+  oauth_flow: "PASS->generates_codes"
 
 sessions:
+- ts: "2025-07-15T22:00:00Z"
+  fixes: [ "rtm_mcp_refactor", "auth_bypass", "oauth_route_fix", "inspector_integration" ]
+  time: 180
+- ts: "2025-07-15T21:15:00Z"
+  fixes: [ "architecture_refactor", "double_init_crash", "mcp_handler_bug", "missing_routes", "debug_dashboard_fix" ]
+  time: 120
 - ts: "2025-07-15T16:45:00Z"
   fixes: [ "mcp_handler_auth", "McpServer_import", "tool_registration" ]
   time: 45
@@ -125,7 +169,7 @@ sessions:
   time: 30
 
 metrics:
-  orientation: [ 0, 120, 30, 5, 15, 20, 10, 5 ]
-  redundant: [ 3, 0, 0, 0, 0, 0, 0, 2 ]
-  hypothesis_success: [ 1, 1, 1, 1, 1, 1, 1 ]
+  orientation: [ 0, 120, 30, 5, 15, 20, 10, 5, 180 ]
+  redundant: [ 3, 0, 0, 0, 0, 0, 0, 2, 1 ]
+  hypothesis_success: [ 1, 1, 1, 1, 1, 1, 1, 1 ]
   forward: true

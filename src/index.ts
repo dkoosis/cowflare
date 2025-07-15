@@ -59,8 +59,7 @@ app.use('*', cors({
 
 // --- Route Definitions ---
 
-// Health check endpoint
-app.get("/health", (c) => {
+app.get('/health', (c) => {
     const { deploymentName, deploymentTime } = getDeploymentInfo();
     return c.json({
         status: "ok",
@@ -107,12 +106,26 @@ app.all('/mcp', async (c) => {
     body: bodyText,
   });
 
-//  if (body.method === 'initialize') {
-  if (body.method === 'initialize' || body.method === 'tools/list' || body.method?.startsWith('tools/call')) {
+  const isBypassRequest = body.method === 'initialize' || body.method === 'tools/list' || body.method?.startsWith('tools/call');
+
+  if (isBypassRequest) {
     const sessionId = crypto.randomUUID();
     doId = c.env.MCP_OBJECT.idFromName(`mcp-session-${sessionId}`);
-    await logger.log('mcp_initialize_request', { doId: doId.toString() });
+    
+    // Check for auth header even in bypass mode to pass context if available
+    const authHeader = c.req.header('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+      if (tokenDataJSON) {
+        const tokenData = JSON.parse(tokenDataJSON);
+        doRequest.headers.set('X-RTM-Token', token);
+        doRequest.headers.set('X-RTM-UserId', tokenData.userId);
+        doRequest.headers.set('X-RTM-UserName', tokenData.userName);
+      }
+    }
   } else {
+    // This else block handles all other, normally authenticated requests
     const authHeader = c.req.header('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       await logger.log('mcp_no_auth', { method: body.method });
@@ -147,42 +160,12 @@ app.all('/mcp', async (c) => {
     return c.json({ jsonrpc: '2.0', id: body.id || null, error: { code: -32000, message: 'MCP server error' } }, 500);
   }
 });
-// In src/index.ts
 
-// Replace the app.get('/debug', ...) handler with this corrected version
-
-// Health check endpoint
-app.get("/health", (c) => {
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return c.json({
-        status: "ok",
-        service: "rtm-mcp-server",
-        deployment: deploymentName,
-        deployed_at: deploymentTime
-    });
-});
-
-app.get('/debug', (c) => {
-  // 1. Get the deployment info at request time.
-  const { deploymentName, deploymentTime } = getDeploymentInfo();
-  
-  // 2. Call the factory with the fresh data to create the handler.
-  const specificDashboardHandler = createDebugDashboard(deploymentName, deploymentTime);
-  
-  // 3. Immediately call the handler to get the final Response.
-  return specificDashboardHandler(c);
-});
-
-// Health check endpoint
-app.get("/health", (c) => {
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return c.json({
-        status: "ok",
-        service: "rtm-mcp-server",
-        deployment: deploymentName,
-        deployed_at: deploymentTime
-    });
-});
+const debugDashboardHandler = createDebugDashboard(
+  getDeploymentInfo().deploymentName,
+  getDeploymentInfo().deploymentTime
+);
+app.get('/debug', debugDashboardHandler);
 
 app.get('/debug/tokens', async (c) => {
   const list = await c.env.AUTH_STORE.list({ prefix: 'token:' });
@@ -193,7 +176,7 @@ app.get('/debug/tokens', async (c) => {
     if (data) {
       const tokenData = JSON.parse(data);
       tokens.push({
-        token_prefix: key.name.substring(6, 14) + '...',
+        token_prefix: key.name.substring(6),
         ...tokenData,
         mcp_url: `${c.env.SERVER_URL || `https://${c.req.header('host')}`}/mcp`
       });
@@ -224,17 +207,6 @@ app.post('/debug/mcp-test', async (c) => {
       id: 1
     }
   });
-});
-
-// Health check endpoint
-app.get("/health", (c) => {
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return c.json({
-        status: "ok",
-        service: "rtm-mcp-server",
-        deployment: deploymentName,
-        deployed_at: deploymentTime
-    });
 });
 
 app.get('/test/init-mcp', async (c) => {
@@ -290,17 +262,6 @@ app.get('/test/init-mcp', async (c) => {
       token_prefix: token.substring(0, 8) + '...'
     }, 500);
   }
-});
-
-// Health check endpoint
-app.get("/health", (c) => {
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return c.json({
-        status: "ok",
-        service: "rtm-mcp-server",
-        deployment: deploymentName,
-        deployed_at: deploymentTime
-    });
 });
 
 app.get('/test/mcp/:token', async (c) => {
@@ -366,17 +327,6 @@ app.get('/test/mcp/:token', async (c) => {
       message: error instanceof Error ? error.message : String(error)
     }, 500);
   }
-});
-
-// Health check endpoint
-app.get("/health", (c) => {
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return c.json({
-        status: "ok",
-        service: "rtm-mcp-server",
-        deployment: deploymentName,
-        deployed_at: deploymentTime
-    });
 });
 
 app.get('/mcp/capabilities', async (c) => {
