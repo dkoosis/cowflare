@@ -135,3 +135,49 @@ metrics:
   redundant: [ 3, 0, 0, 0, 0, 0 ]
   hypothesis_success: [ 1, 1, 1, 1, 1 ]
   forward: true
+
+### This was added by Gemini - please assess
+Of course. It's a great idea to create a "save point" for our debugging session.
+
+Here is a detailed prompt that encapsulates our entire conversation, analysis, and next steps, including the reminder about our agreed-upon strategy. You can use this to resume our work later today.
+
+Prompt to Resume cowflare Debugging Session
+Goal: Fix the MCP (Model Context Protocol) connection failure in the cowflare Cloudflare Worker project.
+
+Context: The project implements an MCP server for Remember The Milk (RTM). The authentication flow uses a custom OAuth 2.0 adapter to handle RTM's desktop-style authentication. After a user successfully authenticates and the client (Claude.ai) receives a token, the subsequent attempt to connect to the /mcp endpoint fails immediately.
+
+Analysis & Key Findings:
+
+OAuth Flow is Working: The entire OAuth 2.0 flow is successful. The client receives a valid access token. The code for this is primarily in rtm-handler.ts.
+
+Connection Failure: The client connects to the /mcp endpoint but is immediately disconnected with MCP error -32000: Connection closed.
+
+Root Cause Identified (Protocol Violation): The failure is caused by a protocol violation in the rtm-mcp.ts Durable Object. The custom fetch method in the RtmMCP class attempts to extract authentication headers from the initial request. This is incorrect because the MCP protocol requires the first message in any session to be an unauthenticated initialize request to perform a handshake. The server must handle this handshake before requiring authentication.
+
+Dependency Clarification: The project uses a local or private agents/mcp library, not a public npm package like @cloudflare/workers-mcp-agent-plugin-core. The solution must be implemented using the available exports from this existing library.
+
+State of the Code:
+
+rtm-mcp.ts (The Problem File): This file defines the RtmMCP Durable Object agent. Its fetch method contains the protocol violation. The rest of the file correctly defines the MCP server and its tools (e.g., task/add, timeline/create).
+
+rtm-handler.ts (The OAuth Handler): This file defines the Hono application that handles the OAuth routes (/authorize, /token, etc.). This part of the system is working correctly and is separate from the MCP session handling.
+
+Reminder on Protocol Adherence Strategy:
+We agreed that implementing a heavy, manual Finite State Machine (FSM) is unnecessary. The best approach is a lightweight, two-phase strategy:
+
+Leverage the Library: The underlying agents/mcp library should handle the complexities of the "initialized" session state (i.e., managing the stream of authenticated requests).
+
+Handle the Handshake Explicitly: Our own code must only handle the "uninitialized" state. This involves a simple, one-time check in our fetch method: if the incoming message is method: "initialize", we process the handshake. For all other methods, we enforce our custom authentication logic before handing control over to the library's session manager. This avoids a complex if/then loop while ensuring we are protocol-compliant.
+
+Next Action Required:
+The immediate task is to refactor the fetch method in rtm-mcp.ts to be protocol-compliant. The refactored code must:
+
+Correctly handle a "Streamable HTTP" connection using the components available in the agents/mcp library.
+
+Inspect the first message from the client. If the method is initialize, it must be processed without authentication.
+
+For all subsequent messages, it must enforce authentication by checking for the X-RTM-Token header.
+
+Route all valid, authenticated messages to the existing this.server.handle() method for tool execution.
+
+Crucially, preserve all existing tool definitions and other logic within the RtmMCP class from the original rtm-mcp.ts file.
