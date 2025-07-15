@@ -16,11 +16,11 @@
 │   ├── DEBUG-STATE-RECIPE.yaml
 │   ├── DEBUG-STATE.yaml
 │   ├── reference
-│   │   ├── cf_client-connection.ts
-│   │   ├── cf_client.ts
-│   │   ├── cf_do-oauth-client-provider.ts
-│   │   ├── cf_index.ts
-│   │   ├── cf_mcp-index.ts
+│   │   ├── cf_client-connection.txt
+│   │   ├── cf_client.txt
+│   │   ├── cf_do-oauth-client-provider.txt
+│   │   ├── cf_index.txt
+│   │   ├── cf_mcp-index.txt
 │   │   ├── llms-full.txt
 │   │   ├── schema.ts
 │   │   └── ts-sdk.md

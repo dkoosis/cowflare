@@ -3,6 +3,7 @@
  * @description Main entry point for the Cowflare RTM MCP worker.
  * This file sets up the Hono web server, configures middleware for logging and
  * CORS, and defines all the necessary routes for the MCP protocol,
+
  * authentication, health checks, and debugging.
  */
 
@@ -63,11 +64,8 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // --- Middleware Configuration ---
 
-// Apply the debug logging middleware to all incoming requests.
-app.use('*', withDebugLogging);
-
-// Apply CORS middleware to allow requests from authorized origins like Claude.ai.
-app.use('*', cors({
+app.use('*', withDebugLogging); //
+app.use('*', cors({ //
   origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
   credentials: true,
   allowMethods: ['GET', 'POST', 'OPTIONS'],
@@ -77,417 +75,128 @@ app.use('*', cors({
 
 // --- Route Definitions ---
 
+// ADDED: A root handler to prevent 404 errors at the base URL.
+app.get('/', (c) => {
+    const { deploymentName, deploymentTime } = getDeploymentInfo();
+    return c.json({
+        message: 'RTM MCP Server is running.',
+        deployment: deploymentName,
+        deployed_at: deploymentTime
+    });
+});
+
 /**
  * Mounts the RTM-specific authentication handler, which provides the
  * necessary endpoints for our custom, non-OAuth authentication flow.
  */
 const rtmHandler = createRtmHandler();
-app.route('/', rtmHandler);
+app.route('/auth', rtmHandler); // Changed from '/' to '/auth' for clarity
 
-/**
- * The MCP route endpoint. All requests to `/mcp/*` are forwarded to the
- * McpAgent's fetch handler, which manages the connection lifecycle.
- */
-// MCP endpoint - this is what Claude.ai connects to after OAuth
+// REMOVED: The unused mcpHandler created with RtmMCP.serve().
+// This code was dead and conflicted with our final architecture.
+
+// REFACTORED: The entire /mcp handler is restructured to be safer and clearer.
 app.all('/mcp', async (c) => {
   const logger = c.get('debugLogger');
-  
-  // Log all MCP requests for debugging
+  let doId: DurableObjectId;
+  let token: string | undefined;
+  let tokenData: { userId: string; userName: string } | undefined;
+
+  // MCP requests must be POST
+  if (c.req.method !== 'POST') {
+    return c.text('Method Not Allowed', 405);
+  }
+
+  // FIXED: The critical bug where the body was read twice is resolved here.
+  // We read the body ONCE and use the resulting text for all subsequent operations.
+  const bodyText = await c.req.text();
+  let body;
+  try {
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    await logger.log('mcp_body_parse_error', { error: e instanceof Error ? e.message : String(e) });
+    return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
+  }
+
   await logger.log('mcp_request', {
-    method: c.req.method,
-    headers: Object.fromEntries(c.req.raw.headers.entries()),
+    method: body.method,
     url: c.req.url,
-    hasAuth: !!c.req.header('Authorization')
   });
   
-  // Check if this is an initialize request
-  let isInitializeRequest = false;
-  let bodyText: string | undefined;
-  
-  if (c.req.method === 'POST') {
-    try {
-      // Read the body to check the method
-      bodyText = await c.req.text();
-      const body = JSON.parse(bodyText);
-      isInitializeRequest = body.method === 'initialize';
-      
-      await logger.log('mcp_body_check', {
-        method: body.method,
-        isInitialize: isInitializeRequest,
-        bodyLength: bodyText.length
-      });
-    } catch (e) {
-      await logger.log('mcp_body_parse_error', {
-        error: e instanceof Error ? e.message : String(e)
-      });
-    }
-  }
-  
-  // Initialize requests don't need auth - forward directly to DO
-  if (isInitializeRequest) {
-    await logger.log('mcp_initialize_request', {
-      method: 'initialize'
-    });
-    
-    // Create a session-specific DO ID
+  // Logic for the unauthenticated 'initialize' handshake
+  if (body.method === 'initialize') {
     const sessionId = crypto.randomUUID();
-    const doId = c.env.MCP_OBJECT.idFromName(`mcp-init-${sessionId}`);
-    const stub = c.env.MCP_OBJECT.get(doId, {
-      locationHint: 'enam'
-    });
-    
-    // Reconstruct request with the body we read
-    const doRequest = new Request(c.req.raw.url, {
-      method: c.req.raw.method,
-      headers: c.req.raw.headers,
-      body: bodyText
-    });
-    
-    try {
-      const response = await stub.fetch(doRequest);
-      
-      await logger.log('mcp_initialize_response', {
-        status: response.status,
-        contentType: response.headers.get('content-type')
-      });
-      
-      return response;
-    } catch (error) {
-      await logger.log('mcp_initialize_error', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      return c.json({
-        jsonrpc: '2.0',
-        id: null,
-        error: {
-          code: -32000,
-          message: 'MCP initialization failed'
-        }
-      }, 500);
+    doId = c.env.MCP_OBJECT.idFromName(`mcp-session-${sessionId}`);
+    await logger.log('mcp_initialize_request', { doId: doId.toString() });
+  } else {
+    // Logic for all other, authenticated methods
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      await logger.log('mcp_no_auth', { method: body.method });
+      return c.json({ error: 'Unauthorized' }, 401);
     }
+    
+    token = authHeader.substring(7);
+    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+    
+    if (!tokenDataJSON) {
+      await logger.log('mcp_invalid_token', { token_prefix: token.substring(0, 8) });
+      return c.json({ error: 'Invalid token' }, 401);
+    }
+
+    tokenData = JSON.parse(tokenDataJSON);
+    doId = c.env.MCP_OBJECT.idFromName(token);
+    await logger.log('mcp_token_valid', { userId: tokenData.userId, doId: doId.toString() });
   }
-  
-  // Non-initialize requests require auth
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    await logger.log('mcp_no_auth', {
-      authHeader: authHeader || 'none',
-      isInitialize: false
-    });
-    return c.json({ error: 'Unauthorized' }, 401);
+
+  // Common logic to forward the request to the correct Durable Object
+  const stub = c.env.MCP_OBJECT.get(doId);
+  const doRequest = new Request(c.req.url, {
+    method: 'POST',
+    headers: new Headers(c.req.headers),
+    body: bodyText, // Always use the preserved body text
+  });
+
+  // Add user context to headers for authenticated requests
+  if (tokenData && token) {
+    doRequest.headers.set('X-RTM-Token', token);
+    doRequest.headers.set('X-RTM-UserId', tokenData.userId);
+    doRequest.headers.set('X-RTM-UserName', tokenData.userName);
   }
-  
-  const token = authHeader.substring(7);
-  
-  // Verify token exists in our store
-  const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-  if (!tokenDataJSON) {
-    await logger.log('mcp_invalid_token', {
-      token_prefix: token.substring(0, 8)
-    });
-    return c.json({ error: 'Invalid token' }, 401);
-  }
-  
-  const tokenData = JSON.parse(tokenDataJSON);
-  
-  await logger.log('mcp_token_valid', {
-    userId: tokenData.userId,
-    userName: tokenData.userName,
-    token_prefix: token.substring(0, 8)
-  });
-  
-  // Create Durable Object ID from token
-  const doId = c.env.MCP_OBJECT.idFromName(token);
-  const stub = c.env.MCP_OBJECT.get(doId, {
-    locationHint: 'enam'
-  });
-  
-  // Reconstruct request with body if we read it
-  const doRequest = new Request(c.req.raw.url, {
-    method: c.req.raw.method,
-    headers: new Headers(c.req.raw.headers),
-    body: bodyText || c.req.raw.body
-  });
-  
-  // Add auth data to headers so DO can access it
-  doRequest.headers.set('X-RTM-Token', token);
-  doRequest.headers.set('X-RTM-UserId', tokenData.userId);
-  doRequest.headers.set('X-RTM-UserName', tokenData.userName);
-  
-  await logger.log('mcp_forwarding_to_do', {
-    doId: doId.toString(),
-    hasToken: true,
-    userName: tokenData.userName
-  });
-  
+
   try {
     const response = await stub.fetch(doRequest);
-    
-    await logger.log('mcp_do_response', {
-      status: response.status,
-      contentType: response.headers.get('content-type'),
-      hasBody: response.headers.get('content-length') !== '0'
-    });
-    
+    await logger.log('mcp_do_response', { status: response.status });
     return response;
   } catch (error) {
-    await logger.log('mcp_do_error', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    return c.json({
-      jsonrpc: '2.0',
-      id: null,
-      error: {
-        code: -32000,
-        message: 'MCP server error'
-      }
-    }, 500);
+    await logger.log('mcp_do_error', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ jsonrpc: '2.0', id: body.id || null, error: { code: -32000, message: 'MCP server error' } }, 500);
   }
 });
 
-// Check what tokens we have and their MCP status
-app.get('/debug/tokens', async (c) => {
+// ADDED: The debug dashboard route is restored.
+app.get('/debug', (c) => {
+    const logger = c.get('debugLogger');
+    const { deploymentName, deploymentTime } = getDeploymentInfo();
+    return createDebugDashboard(logger, deploymentName, deploymentTime);
+});
+
+app.get('/debug/tokens', async (c) => { //
   const list = await c.env.AUTH_STORE.list({ prefix: 'token:' });
   const tokens = [];
   
   for (const key of list.keys) {
     const data = await c.env.AUTH_STORE.get(key.name);
     if (data) {
-      const tokenData = JSON.parse(data);
       tokens.push({
         token_prefix: key.name.substring(6, 14) + '...',
-        ...tokenData,
-        mcp_url: `${c.env.SERVER_URL || `https://${c.req.header('host')}`}/mcp`
+        ...JSON.parse(data),
       });
     }
   }
-  
-  return c.json({
-    tokens,
-    count: tokens.length,
-    server_url: c.env.SERVER_URL || `https://${c.req.header('host')}`
-  });
+  return c.json({ tokens, count: tokens.length });
 });
 
-// Test what Claude.ai should be calling
-app.post('/debug/mcp-test', async (c) => {
-  const body = await c.req.text();
-  const headers = Object.fromEntries(c.req.raw.headers.entries());
-  
-  return c.json({
-    received: {
-      body,
-      headers,
-      method: c.req.method
-    },
-    expected_format: {
-      jsonrpc: "2.0",
-      method: "initialize",
-      params: {
-        protocolVersion: "1.0",
-        capabilities: {}
-      },
-      id: 1
-    }
-  });
-});
-
-// Manual MCP initialization test
-app.get('/test/init-mcp', async (c) => {
-  // Get the most recent token
-  const list = await c.env.AUTH_STORE.list({ prefix: 'token:', limit: 1 });
-  if (list.keys.length === 0) {
-    return c.json({ error: 'No tokens found' }, 404);
-  }
-  
-  const tokenKey = list.keys[0].name;
-  const token = tokenKey.substring(6); // Remove 'token:' prefix
-  const tokenDataJSON = await c.env.AUTH_STORE.get(tokenKey);
-  const tokenData = JSON.parse(tokenDataJSON!);
-  
-  // Create DO and test initialization
-  const doId = c.env.RTM_MCP.idFromName(token);
-  const stub = c.env.RTM_MCP.get(doId);
-  
-  // Test the initialization
-  const testRequest = new Request('https://do.test/mcp', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-RTM-Token': token,
-      'X-RTM-UserId': tokenData.userId,
-      'X-RTM-UserName': tokenData.userName
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'initialize',
-      params: {
-        protocolVersion: '1.0',
-        capabilities: {}
-      },
-      id: 1
-    })
-  });
-  
-  try {
-    const response = await stub.fetch(testRequest);
-    const result = await response.json();
-    
-    return c.json({
-      token_info: {
-        token_prefix: token.substring(0, 8) + '...',
-        userName: tokenData.userName,
-        userId: tokenData.userId
-      },
-      do_id: doId.toString(),
-      init_response: {
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: result
-      }
-    });
-  } catch (error) {
-    return c.json({
-      error: 'DO initialization failed',
-      message: error instanceof Error ? error.message : String(error),
-      token_prefix: token.substring(0, 8) + '...'
-    }, 500);
-  }
-});
-
-// Add this to src/index.ts after the /test/rtm endpoint
-
-// Test MCP initialization with a token
-app.get('/test/mcp/:token', async (c) => {
-  const token = c.req.param('token');
-  const logger = c.get('debugLogger');
-  
-  await logger.log('mcp_test_start', {
-    token_prefix: token.substring(0, 8),
-    endpoint: '/test/mcp'
-  });
-  
-  try {
-    // Check if token exists in KV
-    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-    
-    if (!tokenDataJSON) {
-      return c.json({
-        error: 'Token not found',
-        token_prefix: token.substring(0, 8)
-      }, 404);
-    }
-    
-    const tokenData = JSON.parse(tokenDataJSON);
-    
-    // Try to create a Durable Object with this token
-    const doId = c.env.RTM_MCP.idFromName(token);
-    const stub = c.env.RTM_MCP.get(doId);
-    
-    // Initialize the DO with auth data
-    const initResponse = await stub.fetch('https://do.test/init', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        rtmToken: token,
-        userName: tokenData.userName,
-        userId: tokenData.userId
-      })
-    });
-    
-    const initResult = await initResponse.text();
-    
-    // Test the MCP endpoint
-    const mcpTestResponse = await stub.fetch('https://do.test/mcp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {
-          protocolVersion: '1.0',
-          capabilities: {}
-        },
-        id: 1
-      })
-    });
-    
-    const mcpResult = await mcpTestResponse.json();
-    
-    await logger.log('mcp_test_success', {
-      token_data: tokenData,
-      init_status: initResponse.status,
-      init_result: initResult,
-      mcp_status: mcpTestResponse.status,
-      mcp_result: mcpResult
-    });
-    
-    return c.json({
-      token_valid: true,
-      token_data: {
-        userName: tokenData.userName,
-        userId: tokenData.userId,
-        created_at: tokenData.created_at
-      },
-      durable_object: {
-        id: doId.toString(),
-        init_status: initResponse.status,
-        init_result: initResult
-      },
-      mcp_test: {
-        status: mcpTestResponse.status,
-        result: mcpResult
-      }
-    });
-    
-  } catch (error) {
-    await logger.log('mcp_test_error', {
-      error: error instanceof Error ? error.message : String(error),
-      token_prefix: token.substring(0, 8)
-    });
-    
-    return c.json({
-      error: 'MCP test failed',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-// Also add an endpoint to check what Claude expects
-app.get('/mcp/capabilities', async (c) => {
-  return c.json({
-    mcp_version: '1.0',
-    server_info: {
-      name: 'rtm-mcp-server',
-      version: '2.5.0'
-    },
-    capabilities: {
-      tools: true,
-      resources: false,
-      prompts: false
-    },
-    transport: {
-      type: 'http',
-      supports_streaming: true
-    }
-  });
-});
 // --- Exports ---
-
-/**
- * The default export is the Hono app instance, which is what Cloudflare Workers
- * will use to handle incoming requests.
- */
-export default app;
-
-/**
- * The RtmMCP class is also exported, which is required by the Cloudflare
- * Worker runtime for Durable Object instantiation.
- */
-export { RtmMCP };
+export default app; //
+export { RtmMCP }; //
