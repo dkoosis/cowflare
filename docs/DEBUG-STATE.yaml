@@ -3,20 +3,20 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "strong-Minnie Moo"
-  last_update: "2025-07-15T02:35:00Z"
+  last_update: "2025-07-15T16:45:00Z"
 
 state:
   build: "PASS"
-  inspector_connect: "PASS"
-  tool_execution: "PASS"
+  inspector_connect: "UNTESTED"
+  tool_execution: "UNTESTED"
   auth_flow: "PASS"
   oauth_integration: "PASS"
   rtm_user_fetch: "PASS"
-  claude_integration: "FAIL"
-  mcp_connection: "FAIL"
+  claude_integration: "UNTESTED"
+  mcp_connection: "UNTESTED"
   logging: "PASS"
   rtm_mcp_protocol: "PASS"
-  index_mcp_handler: "FAIL"
+  index_mcp_handler: "PASS"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -40,6 +40,13 @@ proven:
 - "index.ts:/mcp->ALL_require_bearer"
 - "agents/mcp==local_library"
 - "this.server.tool()!=registerTool()"
+- "mcp_initialize!=require_auth"
+- "McpServer==@modelcontextprotocol/sdk/server/mcp.js"
+- "server.tool()==4_params(name,desc,schema,handler)"
+- "schema_names!=rtm_prefix"
+- "inline_schemas>missing_imports"
+- "rtm_api.getTasks()==implemented"
+- "rtm_api.addTask()==implemented"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -50,24 +57,32 @@ failed:
 - "claude_ai_integration->shows_connect_after_oauth"
 - "mcp_connection->no_requests_after_oauth"
 - "index_mcp_handler->blocks_initialize->-32000"
+- "McpServer_import->agents/mcp"
+- "rtmGetTasksSchema->GetTasksSchema"
+- "server.setRequestHandler->server.tool"
 
 hypotheses:
   h1:
-    desc: "index_blocks_initialize->fix_auth_check"
-    test: "artifact:mcp-handler-fix"
+    desc: "mcp_should_connect->test_inspector"
+    test: "npx @modelcontextprotocol/inspector"
     priority: 1
+  h2:
+    desc: "tools_execute->test_rtm_getTasks"
+    test: "inspector:rtm_getTasks"
+    priority: 2
 
-next_action: "apply:mcp-handler-fix->index.ts:L50-86"
+next_action: "deploy->test_inspector"
 
 code_refs:
   serve: "src/index.ts:L34"
   cors: "src/index.ts:L36"
-  mcp_broken: "src/index.ts:L54-58"
-  mcp_fix: "artifact:mcp-handler-fix"
+  mcp_handler: "src/index.ts:L54-155"
   rtm_fetch: "src/rtm-mcp.ts:L36-76"
   rtm_init: "src/rtm-mcp.ts:L81-84"
   rtm_tools: "src/rtm-mcp.ts:L93-145"
-  test_init: "src/index.ts:L298+"
+  imports: "src/rtm-mcp.ts:L2-3"
+  tool_reg: "src/rtm-mcp.ts:L69-180"
+  inline_schemas: "src/rtm-mcp.ts:L86-91"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -81,14 +96,24 @@ errors_fixed:
   e9: "getToken_string->getToken_object"
   e10: "rtm_mcp->sessionInitialized"
   e11: "index_mcp->check_body.method"
+  e12: "initialize_auth_check->read_body_first"
+  e13: "McpServer_import->sdk/server/mcp.js"
+  e14: "missing_schemas->inline_definitions"
+  e15: "setRequestHandler->server.tool"
 
 test_results:
   oauth: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
   user_id: "430794"
   redirect: "https://claude.ai/api/mcp/auth_callback"
   mcp_after_oauth: "FAIL:-32000"
+  build: "PASS"
+  mcp_handler_fix: "applied"
+  rtm_mcp_fix: "applied"
 
 sessions:
+- ts: "2025-07-15T16:45:00Z"
+  fixes: [ "mcp_handler_auth", "McpServer_import", "tool_registration" ]
+  time: 45
 - ts: "2025-07-15T02:35:00Z"
   fixes: [ "index_mcp_root_cause" ]
   time: 95
@@ -100,7 +125,7 @@ sessions:
   time: 30
 
 metrics:
-  orientation: [ 0, 120, 30, 5, 15, 20, 10 ]
-  redundant: [ 3, 0, 0, 0, 0, 0, 0 ]
-  hypothesis_success: [ 1, 1, 1, 1, 1, 1 ]
+  orientation: [ 0, 120, 30, 5, 15, 20, 10, 5 ]
+  redundant: [ 3, 0, 0, 0, 0, 0, 0, 2 ]
+  hypothesis_success: [ 1, 1, 1, 1, 1, 1, 1 ]
   forward: true

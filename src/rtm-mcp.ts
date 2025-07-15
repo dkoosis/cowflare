@@ -1,9 +1,10 @@
 // File: src/rtm-mcp.ts
-import { McpAgent, McpServer } from 'agents/mcp';
+import { McpAgent } from 'agents/mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { RtmApi } from './rtm-api';
 import type { Env, RTMList } from './types';
-import * as schemas from './schemas/task-schemas';
+import * as schemas from './schemas/index';
 
 /**
  * Remember The Milk MCP Server
@@ -13,7 +14,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   private rtmToken?: string;
   private userName?: string;
   private userId?: string;
-  private sessionInitialized = false; // Renamed to avoid base class property conflict
+  private sessionInitialized = false;
 
   server = new McpServer({
     name: 'rtm',
@@ -23,17 +24,9 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     console.log('[RtmMCP] Constructor called');
-    this.init(); // Ensure tools are registered on startup
+    this.init();
   }
 
-  /**
-   * REFACTORED FETCH METHOD
-   *
-   * This method now correctly implements the two-phase MCP handshake.
-   * 1. On the first POST, it treats it as the 'initialize' handshake and
-   * passes it to the parent handler without an auth check.
-   * 2. On all subsequent requests, it requires an auth token.
-   */
   async fetch(request: Request): Promise<Response> {
     console.log('[RtmMCP] fetch called', {
       url: request.url,
@@ -41,19 +34,15 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
       isInitialized: this.sessionInitialized
     });
 
-    // If the session is not yet initialized, this MUST be the handshake.
     if (!this.sessionInitialized) {
       console.log('[RtmMCP] Connection is not initialized. Assuming this is the handshake.');
-      this.sessionInitialized = true; // Mark as initialized
+      this.sessionInitialized = true;
       return super.fetch(request);
     }
-
-    // --- All subsequent requests require authentication ---
 
     const token = request.headers.get('X-RTM-Token');
     if (!token) {
       console.error('[RtmMCP] Error: Missing X-RTM-Token header on authenticated request.');
-      // Manually construct the error response as the jsonrpc helper is not available here.
       return new Response(JSON.stringify({
         jsonrpc: '2.0',
         id: null,
@@ -64,7 +53,6 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
       }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Store auth details for the lifetime of this request/tool call.
     this.rtmToken = token;
     this.userId = request.headers.get('X-RTM-UserId') || undefined;
     this.userName = request.headers.get('X-RTM-UserName') || undefined;
@@ -73,88 +61,286 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
     this.props.userName = this.userName;
 
     console.log(`[RtmMCP] Authenticated request for user ${this.userId}`);
-
-    // Now that auth is established, let the parent handle the request.
     return super.fetch(request);
   }
 
-  /**
-   * Initialize the MCP server and register tools.
-   */
   async init() {
-    console.log('[RtmMCP] Init called');
-    this.initializeTools();
-    console.log('[RtmMCP] Init complete, tools registered');
+    console.log('[RtmMCP] init() called', {
+      hasToken: !!this.rtmToken,
+      props: this.props
+    });
+
+    // Register tools with available schemas or empty objects
+    this.server.tool(
+      'rtm_getLists',
+      'Get all lists/folders from Remember The Milk',
+      {},
+      this.handleGetLists.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_getSettings',
+      'Get user settings from Remember The Milk',
+      {},
+      this.handleGetSettings.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_getTasks',
+      'Get tasks from Remember The Milk with optional filters',
+      {
+        filter: { type: 'string', description: 'Optional RTM filter query' },
+        list_id: { type: 'string', description: 'Optional list ID to filter by' }
+      },
+      this.handleGetTasks.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_authenticate',
+      'Check authentication status',
+      {},
+      this.handleAuthenticate.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_addTask',
+      'Add a new task to Remember The Milk',
+      {
+        name: { type: 'string', description: 'Task name' },
+        list_id: { type: 'string', description: 'Optional list ID' },
+        parse: { type: 'boolean', description: 'Parse smart add syntax' }
+      },
+      this.handleAddTask.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_deleteTask',
+      'Delete a task from Remember The Milk',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' }
+      },
+      this.handleDeleteTask.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_completeTask',
+      'Mark a task as complete',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' }
+      },
+      this.handleCompleteTask.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_uncompleteTask',
+      'Mark a task as incomplete',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' }
+      },
+      this.handleUncompleteTask.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_setTaskName',
+      'Update task name',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' },
+        name: { type: 'string', description: 'New task name' }
+      },
+      this.handleSetTaskName.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_setTaskPriority',
+      'Update task priority',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' },
+        priority: { type: 'string', description: 'Priority (1, 2, 3, or N)' }
+      },
+      this.handleSetTaskPriority.bind(this)
+    );
+
+    this.server.tool(
+      'rtm_setTaskDueDate',
+      'Update task due date',
+      {
+        list_id: { type: 'string', description: 'List ID' },
+        taskseries_id: { type: 'string', description: 'Task series ID' },
+        task_id: { type: 'string', description: 'Task ID' },
+        due: { type: 'string', description: 'Due date' },
+        has_due_time: { type: 'boolean', description: 'Has due time' },
+        parse: { type: 'boolean', description: 'Parse date format' }
+      },
+      this.handleSetTaskDueDate.bind(this)
+    );
+
+    console.log('[RtmMCP] Tools registered successfully');
   }
 
-  /**
-   * Register all RTM tools with the MCP server
-   */
-  private initializeTools() {
-    console.log('[RtmMCP] Registering RTM tools');
+  private async handleGetLists(request: any) {
+    console.log('[RtmMCP] rtm_getLists called');
+    const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+    try {
+      // Using getTasks as a workaround since getLists doesn't exist yet
+      const response = await api.getTasks(this.rtmToken!);
+      const lists = response.lists?.list || [];
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ lists }, null, 2)
+        }]
+      };
+    } catch (error) {
+      console.error('[RtmMCP] Error in rtm_getLists:', error);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }]
+      };
+    }
+  }
 
-    // Tool: Start RTM authentication process
-    this.server.tool('rtm_authenticate', 'Start RTM authentication process', {}, async () => {
-      console.log('[RtmMCP] Tool called: rtm_authenticate');
-      const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-      const frob = await api.getFrob();
-      const authUrl = await api.getAuthUrl(frob, 'delete');
-      return { content: [{ type: 'text', text: `To authenticate with Remember The Milk:\n\n1. Open this URL in a new tab: ${authUrl}\n2. Authorize the application\n3. Return here and use the rtm_complete_auth tool with frob: ${frob}` }] };
-    });
+  private async handleGetSettings(request: any) {
+    console.log('[RtmMCP] rtm_getSettings called');
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Get settings not yet implemented'
+      }]
+    };
+  }
 
-    // Tool: Complete RTM authentication
-    this.server.tool('rtm_complete_auth', 'Complete RTM authentication after authorizing in browser', { frob: z.string().describe('The frob token from rtm_authenticate') }, async (args: { frob: string }) => {
-      console.log('[RtmMCP] Tool called: rtm_complete_auth');
-      const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-      const tokenResponse = await api.getToken(args.frob);
-      return { content: [{ type: 'text', text: `Authentication successful! Your token is: ${tokenResponse.token}. Please use this token in the 'X-RTM-Token' header for all future requests.` }] };
-    });
+  private async handleGetTasks(request: any) {
+    console.log('[RtmMCP] rtm_getTasks called with params:', request);
+    const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+    try {
+      const tasks = await api.getTasks(this.rtmToken!, request.filter, request.list_id);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(tasks, null, 2)
+        }]
+      };
+    } catch (error) {
+      console.error('[RtmMCP] Error in rtm_getTasks:', error);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }]
+      };
+    }
+  }
 
-    // Tool: Check current authentication status
-    this.server.tool('rtm_check_auth_status', 'Check current RTM authentication status', {}, async () => {
-      console.log('[RtmMCP] Tool called: rtm_check_auth_status');
-      if (this.rtmToken && this.userName) {
-        return { content: [{ type: 'text', text: `Authenticated as: ${this.userName} (ID: ${this.userId})` }] };
-      }
-      return { content: [{ type: 'text', text: 'Not authenticated. Use rtm_authenticate and rtm_complete_auth tools.' }] };
-    });
+  private async handleAuthenticate(request: any) {
+    console.log('[RtmMCP] rtm_authenticate called');
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          authenticated: !!this.rtmToken,
+          userName: this.userName,
+          userId: this.userId
+        }, null, 2)
+      }]
+    };
+  }
 
-    // Tool: Create a new timeline
-    this.server.tool('timeline/create', 'Create a new timeline for undoable operations', {}, async () => {
-      console.log('[RtmMCP] Tool called: timeline/create');
-      if (!this.rtmToken) return { content: [{ type: 'text', text: 'Error: Not authenticated.' }] };
-      const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-      const timeline = await api.createTimeline(this.rtmToken);
-      return { content: [{ type: 'text', text: `Timeline created: ${timeline}` }] };
-    });
+  private async handleAddTask(request: any) {
+    console.log('[RtmMCP] rtm_addTask called with params:', request);
+    const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+    try {
+      const result = await api.addTask(
+        this.rtmToken!,
+        request.name,
+        request.list_id,
+        request.parse
+      );
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(result, null, 2)
+        }]
+      };
+    } catch (error) {
+      console.error('[RtmMCP] Error in rtm_addTask:', error);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }]
+      };
+    }
+  }
 
-    // Tool: Get tasks
-    this.server.tool('tasks/get', 'Get tasks from a specific list or all lists', schemas.GetTasksSchema.shape, async (args: z.infer<typeof schemas.GetTasksSchema>) => {
-      console.log('[RtmMCP] Tool called: tasks/get');
-      if (!this.rtmToken) return { content: [{ type: 'text', text: 'Error: Not authenticated.' }] };
-      const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-      const tasksResponse = await api.getTasks(this.rtmToken, args.list_id, args.filter);
-      const taskLists = tasksResponse.lists.list;
-      const taskCount = taskLists ? (Array.isArray(taskLists) ? taskLists : [taskLists]).reduce((count: number, list: RTMList) => count + (list.taskseries ? (Array.isArray(list.taskseries) ? list.taskseries.length : 1) : 0), 0) : 0;
-      return { content: [{ type: 'text', text: `Found ${taskCount} tasks.` }] };
-    });
+  private async handleDeleteTask(request: any) {
+    console.log('[RtmMCP] rtm_deleteTask called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Delete task not yet implemented'
+      }]
+    };
+  }
 
-    // Tool: Add a task
-    this.server.tool('task/add', 'Add a new task to Remember The Milk', schemas.AddTaskSchema.shape, async (args: z.infer<typeof schemas.AddTaskSchema>) => {
-      console.log('[RtmMCP] Tool called: task/add');
-      if (!this.rtmToken || !args.timeline) return { content: [{ type: 'text', text: 'Error: Authentication token and timeline are required.' }] };
-      const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-      await api.addTask(this.rtmToken, args.timeline, args.name, args.list_id);
-      return { content: [{ type: 'text', text: `Task added successfully: "${args.name}"` }] };
-    });
+  private async handleCompleteTask(request: any) {
+    console.log('[RtmMCP] rtm_completeTask called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Complete task not yet implemented'
+      }]
+    };
+  }
 
-    // Tool: Complete a task
-    this.server.tool('task/complete', 'Mark a task as completed', schemas.CompleteTaskSchema.shape, async (args: z.infer<typeof schemas.CompleteTaskSchema>) => {
-      console.log('[RtmMCP] Tool called: task/complete');
-      if (!this.rtmToken || !args.timeline) return { content: [{ type: 'text', text: 'Error: Authentication and timeline are required.' }] };
-      return { content: [{ type: 'text', text: `Complete task functionality is not yet implemented for task: ${args.task_id}` }] };
-    });
+  private async handleUncompleteTask(request: any) {
+    console.log('[RtmMCP] rtm_uncompleteTask called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Uncomplete task not yet implemented'
+      }]
+    };
+  }
 
-    console.log('[RtmMCP] All tools registered');
+  private async handleSetTaskName(request: any) {
+    console.log('[RtmMCP] rtm_setTaskName called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Set task name not yet implemented'
+      }]
+    };
+  }
+
+  private async handleSetTaskPriority(request: any) {
+    console.log('[RtmMCP] rtm_setTaskPriority called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Set task priority not yet implemented'
+      }]
+    };
+  }
+
+  private async handleSetTaskDueDate(request: any) {
+    console.log('[RtmMCP] rtm_setTaskDueDate called with params:', request);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: 'Set task due date not yet implemented'
+      }]
+    };
   }
 }
