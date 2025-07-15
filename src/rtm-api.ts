@@ -1,5 +1,5 @@
 // File: src/rtm-api.ts
-import type { RTMResponse, RTMTask, RTMTaskSeries } from './types';
+import type { RTMResponse, RTMTask, RTMTaskSeries, RTMList } from './types';
 
 export class RtmApi {
   private apiKey: string;
@@ -186,11 +186,9 @@ export class RtmApi {
         userId: response.auth?.user?.id,
         username: response.auth?.user?.username,
         fullname: response.auth?.user?.fullname,
-        // Log the complete structure for debugging
         fullAuthStructure: JSON.stringify(response.auth, null, 2)
       });
       
-      // Return the full auth object so we can use the user info
       return {
         token: response.auth.token,
         auth: response.auth
@@ -204,7 +202,6 @@ export class RtmApi {
     }
   }
 
-  // Test method to check if credentials are valid
   async testCredentials(): Promise<{ valid: boolean; error?: string }> {
     console.log('[RtmApi] testCredentials called');
     try {
@@ -220,14 +217,10 @@ export class RtmApi {
     }
   }
 
-  // Method to check token validity and get user info
   async checkToken(authToken: string): Promise<any> {
     console.log('[RtmApi] checkToken called');
     try {
-      const response = await this.makeRequest('rtm.auth.checkToken', {
-        auth_token: authToken
-      });
-      
+      const response = await this.makeRequest('rtm.auth.checkToken', { auth_token: authToken });
       console.log('[RtmApi] checkToken response:', {
         hasAuth: !!response.auth,
         hasUser: !!response.auth?.user,
@@ -235,7 +228,6 @@ export class RtmApi {
         username: response.auth?.user?.username,
         fullResponse: JSON.stringify(response, null, 2)
       });
-      
       return response;
     } catch (error) {
       console.error('[RtmApi] checkToken error:', error);
@@ -245,67 +237,53 @@ export class RtmApi {
 
   async createTimeline(authToken: string): Promise<string> {
     console.log('[RtmApi] createTimeline called');
-    const response = await this.makeRequest<{ timeline: string }>('rtm.timelines.create', {
-      auth_token: authToken
-    });
+    const response = await this.makeRequest<{ timeline: string }>('rtm.timelines.create', { auth_token: authToken });
     console.log('[RtmApi] createTimeline response:', { 
       timeline: response.timeline,
       responseKeys: Object.keys(response)
     });
     return response.timeline;
   }
+  
+  // ADDED: Missing getTasks method to satisfy rtm-mcp.ts
+  async getTasks(authToken: string, list_id?: string, filter?: string): Promise<{ lists: { list: RTMList[] } }> {
+    const params: Record<string, string> = { auth_token: authToken };
+    if (list_id) params.list_id = list_id;
+    if (filter) params.filter = filter;
+    return this.makeRequest('rtm.tasks.getList', params);
+  }
+
+  // ADDED: Missing addTask method to satisfy rtm-mcp.ts
+  async addTask(authToken: string, timeline: string, name: string, list_id?: string): Promise<any> {
+    const params: Record<string, string> = { auth_token: authToken, timeline, name };
+    if (list_id) params.list_id = list_id;
+    return this.makeRequest('rtm.tasks.add', params);
+  }
 
   formatLists(lists: any): string {
-    console.log('[RtmApi] formatLists called:', {
-      hasLists: !!lists,
-      isArray: Array.isArray(lists),
-      listCount: Array.isArray(lists) ? lists.length : 1
-    });
-    
     if (!lists) return 'No lists found';
     const listArray = Array.isArray(lists) ? lists : [lists];
-    
-    console.log('[RtmApi] Formatting', listArray.length, 'lists');
-    
-    return listArray.map(list => 
-      `- ${list.name} (ID: ${list.id})${list.smart === '1' ? ' [Smart List]' : ''}`
-    ).join('\n');
+    return listArray.map(list => `- ${list.name} (ID: ${list.id})${list.smart === '1' ? ' [Smart List]' : ''}`).join('\n');
   }
 
   formatTasks(lists: any): string {
-    console.log('[RtmApi] formatTasks called:', {
-      hasLists: !!lists,
-      isArray: Array.isArray(lists),
-      listCount: Array.isArray(lists) ? lists.length : 1
-    });
-    
     if (!lists) return 'No tasks found';
     const listArray = Array.isArray(lists) ? lists : [lists];
-    
     const tasks: string[] = [];
     let totalTasks = 0;
-    
     listArray.forEach((list: { id: string, taskseries?: RTMTaskSeries | RTMTaskSeries[] }) => {
       if (!list.taskseries) return;
-      
       const seriesArray = Array.isArray(list.taskseries) ? list.taskseries : [list.taskseries];
-      
       seriesArray.forEach((series: RTMTaskSeries) => {
         if (!series.task) return;
-        
         const taskArray = Array.isArray(series.task) ? series.task : [series.task];
-        
         taskArray.forEach((task: RTMTask) => {
-          if (task.completed) return; // Skip completed tasks
-          
+          if (task.completed) return;
           tasks.push(`- ${series.name} (List: ${list.id}, Task: ${task.id})`);
           totalTasks++;
         });
       });
     });
-    
-    console.log('[RtmApi] Formatted', totalTasks, 'tasks');
-    
     return tasks.length > 0 ? tasks.join('\n') : 'No active tasks found';
   }
 }
