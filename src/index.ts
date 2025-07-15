@@ -104,8 +104,7 @@ const mcpHandler = RtmMCP.serve('/mcp', {
  * The MCP route endpoint. All requests to `/mcp/*` are forwarded to the
  * McpAgent's fetch handler, which manages the connection lifecycle.
  */
-// In src/index.ts, update the MCP handler section (around line 40-60)
-
+// MCP endpoint - this is what Claude.ai connects to after OAuth
 // MCP endpoint - this is what Claude.ai connects to after OAuth
 app.all('/mcp', async (c) => {
   const logger = c.get('debugLogger');
@@ -118,297 +117,132 @@ app.all('/mcp', async (c) => {
     hasAuth: !!c.req.header('Authorization')
   });
   
-  // Extract token from Authorization header
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    await logger.log('mcp_no_auth', {
-      authHeader: authHeader || 'none'
-    });
-    return c.json({ error: 'Unauthorized' }, 401);
+  // Check if this is an initialize request - these don't require auth
+  let isInitializeRequest = false;
+  if (c.req.method === 'POST') {
+    try {
+      const bodyText = await c.req.text();
+      const body = JSON.parse(bodyText);
+      isInitializeRequest = body.method === 'initialize';
+      
+      // Reconstruct request with body
+      c.req.raw = new Request(c.req.raw.url, {
+        method: c.req.raw.method,
+        headers: c.req.raw.headers,
+        body: bodyText
+      });
+    } catch (e) {
+      // If we can't parse the body, assume it's not initialize
+    }
   }
   
-  const token = authHeader.substring(7);
-  
-  // Verify token exists in our store
-  const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-  if (!tokenDataJSON) {
-    await logger.log('mcp_invalid_token', {
+  // For non-initialize requests, require auth
+  if (!isInitializeRequest) {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      await logger.log('mcp_no_auth', {
+        authHeader: authHeader || 'none',
+        isInitialize: false
+      });
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    
+    const token = authHeader.substring(7);
+    
+    // Verify token exists in our store
+    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+    if (!tokenDataJSON) {
+      await logger.log('mcp_invalid_token', {
+        token_prefix: token.substring(0, 8)
+      });
+      return c.json({ error: 'Invalid token' }, 401);
+    }
+    
+    const tokenData = JSON.parse(tokenDataJSON);
+    
+    await logger.log('mcp_token_valid', {
+      userId: tokenData.userId,
+      userName: tokenData.userName,
       token_prefix: token.substring(0, 8)
     });
-    return c.json({ error: 'Invalid token' }, 401);
-  }
-  
-  const tokenData = JSON.parse(tokenDataJSON);
-  
-  await logger.log('mcp_token_valid', {
-    userId: tokenData.userId,
-    userName: tokenData.userName,
-    token_prefix: token.substring(0, 8)
-  });
-  
-  // Create Durable Object ID from token
-  const doId = c.env.RTM_MCP.idFromName(token);
-  const stub = c.env.RTM_MCP.get(doId, {
-    locationHint: 'enam'
-  });
-  
-  // Pass the auth data as props to the Durable Object
-  const doRequest = new Request(c.req.raw, {
-    headers: new Headers(c.req.raw.headers)
-  });
-  
-  // Add auth data to headers so DO can access it
-  doRequest.headers.set('X-RTM-Token', token);
-  doRequest.headers.set('X-RTM-UserId', tokenData.userId);
-  doRequest.headers.set('X-RTM-UserName', tokenData.userName);
-  
-  await logger.log('mcp_forwarding_to_do', {
-    doId: doId.toString(),
-    hasToken: !!token,
-    userName: tokenData.userName
-  });
-  
-  try {
-    // Forward to Durable Object
-    const response = await stub.fetch(doRequest);
     
-    await logger.log('mcp_do_response', {
-      status: response.status,
-      contentType: response.headers.get('content-type'),
-      hasBody: response.headers.get('content-length') !== '0'
+    // Create Durable Object ID from token
+    const doId = c.env.RTM_MCP.idFromName(token);
+    const stub = c.env.RTM_MCP.get(doId, {
+      locationHint: 'enam'
     });
     
-    return response;
-  } catch (error) {
-    await logger.log('mcp_do_error', {
-      error: error instanceof Error ? error.message : String(error)
+    // Pass the auth data as props to the Durable Object
+    const doRequest = new Request(c.req.raw, {
+      headers: new Headers(c.req.raw.headers)
     });
     
-    return c.json({
-      error: 'MCP server error',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-/**
- * The debug dashboard endpoint.
- * Provides a web interface to view live logs and transaction history.
- */
-app.get('/debug', (c) => {
-  // Get the lazily-initialized deployment info
-  const { deploymentName, deploymentTime } = getDeploymentInfo();
-  // Pass deployment info to the dashboard for display in the banner.
-  return createDebugDashboard(deploymentName, deploymentTime)(c);
-});
-
-// Add this route to src/index.ts after the existing /debug route
-
-/**
- * Debug endpoint to view ALL logs (not just OAuth flows)
- * Temporary endpoint for debugging
- */
-// Add this route to src/index.ts after the existing /debug route
-
-/**
- * Debug endpoint to view ALL logs (not just OAuth flows)
- * Temporary endpoint for debugging
- */
-// Then update the /debug/all endpoint to be simpler:
-app.get('/debug/all', async (c) => {
-  const { DebugLogger } = await import('./debug-logger');
-  const logs = await DebugLogger.getRecentLogs(c.env, 50); // Get last 50 logs
-  
-  // Group by session ID
-  const grouped = logs.reduce((acc, log) => {
-    if (!acc[log.sessionId]) {
-      acc[log.sessionId] = [];
+    // Add auth data to headers so DO can access it
+    doRequest.headers.set('X-RTM-Token', token);
+    doRequest.headers.set('X-RTM-UserId', tokenData.userId);
+    doRequest.headers.set('X-RTM-UserName', tokenData.userName);
+    
+    await logger.log('mcp_forwarding_to_do', {
+      doId: doId.toString(),
+      hasToken: !!token,
+      userName: tokenData.userName
+    });
+    
+    try {
+      // Forward to Durable Object
+      const response = await stub.fetch(doRequest);
+      
+      await logger.log('mcp_do_response', {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        hasBody: response.headers.get('content-length') !== '0'
+      });
+      
+      return response;
+    } catch (error) {
+      await logger.log('mcp_do_error', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return c.json({
+        error: 'MCP server error',
+        message: error instanceof Error ? error.message : String(error)
+      }, 500);
     }
-    acc[log.sessionId].push(log);
-    return acc;
-  }, {} as Record<string, DebugEvent[]>);
-  
-  return c.json({
-    total: logs.length,
-    sessions: Object.keys(grouped).length,
-    logs: grouped
-  });
-});
-
-/**
- * The health check endpoint.
- * Provides metadata about the running service, including its version, deployment
- * name, and a check of which McpAgent methods are available.
- */
-app.get('/health', (c) => {
-  // Get the lazily-initialized deployment info
-  const { deploymentName, deploymentTime } = getDeploymentInfo();
-
-  const mcpMethods = {
-    hasServe: typeof (RtmMCP as any).serve === 'function',
-    hasServeSSE: typeof (RtmMCP as any).serveSSE === 'function',
-    hasMount: typeof (RtmMCP as any).mount === 'function',
-    hasFetch: typeof (RtmMCP as any).fetch === 'function'
-  };
-  
-  return c.json({ 
-    status: 'ok',
-    service: 'rtm-mcp-server',
-    version: '2.5.0',
-    deployment_name: deploymentName,
-    transport: 'streamable-http',
-    mcp_compliant: mcpMethods.hasServe, // Dynamically check compliance
-    deployed_at: deploymentTime,
-    mcp_methods: mcpMethods
-  });
-});
-
-/**
- * Debug log deletion endpoint.
- * Handles deletion of debug logs for specified session IDs.
- */
-app.post('/debug/delete', async (c) => {
-  try {
-    const { sessionIds } = await c.req.json();
-    
-    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
-      return c.json({ error: 'Invalid request body - sessionIds must be a non-empty array' }, 400);
-    }
-    
-    // Call the static method from DebugLogger
-    const result = await DebugLogger.deleteFlowLogs(c.env, sessionIds);
-    
-    // Log the deletion action
-    const logger = c.get('debugLogger');
-    await logger.log('debug_flows_deleted', {
-      sessionIds,
-      deletedCount: result.deleted
+  } else {
+    // Initialize request - forward without auth
+    await logger.log('mcp_initialize_request', {
+      method: 'initialize'
     });
     
-    return c.json(result);
-  } catch (e) {
-    console.error('Failed to delete logs:', e);
-    return c.json({ error: 'Failed to delete logs' }, 500);
-  }
-});
-
-// Add this to src/index.ts after other routes
-
-/**
- * Test endpoint to verify logging is working
- */
-app.get('/test-log', async (c) => {
-  const logger = c.get('debugLogger');
-  const sessionId = c.get('debugSessionId');
-  
-  // Log a test event
-  await logger.log('test_manual_log', {
-    test: true,
-    timestamp: new Date().toISOString(),
-    sessionId: sessionId,
-    message: 'Manual test log entry'
-  });
-  
-  return c.json({
-    message: 'Test log created',
-    sessionId: sessionId,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Add this to src/index.ts after other routes
-
-/**
- * Debug endpoint to check KV storage directly
- */
-app.get('/debug/kv', async (c) => {
-  try {
-    // List all keys with debug prefix
-    const debugList = await c.env.AUTH_STORE.list({ prefix: 'debug:', limit: 10 });
-    
-    // Get a few sample values
-    const samples: any[] = [];
-    for (const key of debugList.keys.slice(0, 3)) {
-      const value = await c.env.AUTH_STORE.get(key.name);
-      if (value) {
-        samples.push({
-          key: key.name,
-          data: JSON.parse(value)
-        });
-      }
-    }
-    
-    return c.json({
-      totalKeys: debugList.keys.length,
-      complete: debugList.list_complete,
-      keys: debugList.keys.map(k => k.name),
-      samples: samples
+    // Use a fixed DO ID for unauthenticated initialize
+    // This will need to be associated with the session later
+    const doId = c.env.RTM_MCP.idFromName('mcp-init-' + crypto.randomUUID());
+    const stub = c.env.RTM_MCP.get(doId, {
+      locationHint: 'enam'
     });
-  } catch (error) {
-    return c.json({
-      error: 'Failed to read KV',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
-// Add this to src/index.ts after the /debug/kv endpoint
-
-/**
- * Debug endpoint to check token storage
- */
-app.get('/debug/tokens', async (c) => {
-  try {
-    // List all token keys
-    const tokenList = await c.env.AUTH_STORE.list({ prefix: 'token:', limit: 100 });
     
-    // Get sample token data
-    const samples: any[] = [];
-    for (const key of tokenList.keys.slice(0, 5)) {
-      const value = await c.env.AUTH_STORE.get(key.name);
-      if (value) {
-        const data = JSON.parse(value);
-        samples.push({
-          key: key.name,
-          token_prefix: key.name.split(':')[1]?.substring(0, 8) + '...',
-          data: {
-            ...data,
-            // Redact sensitive info
-            userName: data.userName,
-            userId: data.userId,
-            client_id: data.client_id,
-            created_at: data.created_at,
-            age_minutes: Math.floor((Date.now() - data.created_at) / 60000)
-          }
-        });
-      }
+    try {
+      const response = await stub.fetch(c.req.raw);
+      
+      await logger.log('mcp_initialize_response', {
+        status: response.status,
+        contentType: response.headers.get('content-type')
+      });
+      
+      return response;
+    } catch (error) {
+      await logger.log('mcp_initialize_error', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return c.json({
+        error: 'MCP initialization failed',
+        message: error instanceof Error ? error.message : String(error)
+      }, 500);
     }
-    
-    // Also check for auth codes
-    const codeList = await c.env.AUTH_STORE.list({ prefix: 'auth_code:', limit: 10 });
-    
-    return c.json({
-      tokens: {
-        total: tokenList.keys.length,
-        complete: tokenList.list_complete,
-        keys: tokenList.keys.map(k => k.name.replace(/token:(.{8}).*/, 'token:$1...')),
-        samples
-      },
-      auth_codes: {
-        total: codeList.keys.length,
-        complete: codeList.list_complete,
-        keys: codeList.keys.map(k => k.name)
-      }
-    });
-  } catch (error) {
-    return c.json({
-      error: 'Failed to read tokens',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
   }
 });
-
-// Add this endpoint to src/index.ts after the existing debug endpoints
 
 /**
  * Emergency cleanup endpoint for when KV limits are hit
