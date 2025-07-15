@@ -408,6 +408,10 @@ export function createRtmHandler() {
    * OAuth2 Complete Authorization Endpoint
    * Handles return from RTM after user authorization
    */
+/**
+   * OAuth2 Complete Authorization Endpoint
+   * Handles return from RTM after user authorization
+   */
   app.get('/complete-auth', async (c) => {
     const logger = c.get('debugLogger');
     
@@ -453,42 +457,71 @@ export function createRtmHandler() {
         frob_length: frob.length 
       });
       
-      const rtmToken = await api.getToken(frob);
+      // Get token AND user info from RTM
+      let rtmToken: string;
+      let userInfo: any;
       
-      await logger.log('rtm_token_success', { 
-        token_length: rtmToken.length,
-        token_prefix: rtmToken.substring(0, 8)
-      });
-      
-      // Get user info
-      // Note: RTM API doesn't have a separate getUserInfo method
-      // The user info comes with the token response
-      const userInfo = { 
-        auth: { 
-          user: { 
-            id: 'rtm-user-' + Date.now(), 
-            username: 'rtm-user',
-            fullname: 'RTM User'
+      try {
+        const tokenResponse = await api.getToken(frob);
+        rtmToken = tokenResponse.token;
+        
+        await logger.log('rtm_token_success', { 
+          token_length: rtmToken.length,
+          token_prefix: rtmToken.substring(0, 8),
+          hasAuth: !!tokenResponse.auth,
+          hasUser: !!tokenResponse.auth?.user,
+          authKeys: Object.keys(tokenResponse.auth || {}),
+          fullAuthData: JSON.stringify(tokenResponse.auth)
+        });
+        
+        // Use the real user info from RTM
+        userInfo = { 
+          auth: tokenResponse.auth
+        };
+        
+        await logger.log('rtm_user_info', {
+          user_id: userInfo.auth.user?.id,
+          username: userInfo.auth.user?.username,
+          fullname: userInfo.auth.user?.fullname,
+          has_real_data: true,
+          user_data_keys: Object.keys(userInfo.auth.user || {})
+        });
+        
+      } catch (tokenError) {
+        await logger.log('rtm_token_error', {
+          error: tokenError instanceof Error ? tokenError.message : String(tokenError),
+          falling_back_to_mock: true
+        });
+        
+        // Only use mock data if RTM fails completely
+        rtmToken = 'mock-token-' + Date.now();
+        userInfo = { 
+          auth: { 
+            user: { 
+              id: 'rtm-user-' + Date.now(), 
+              username: 'rtm-user',
+              fullname: 'RTM User (Mock)'
+            } 
           } 
-        } 
-      };
-      
-      await logger.log('rtm_user_info', {
-        user_id: userInfo.auth.user.id,
-        username: userInfo.auth.user.username,
-        has_fullname: !!userInfo.auth.user.fullname
-      });
+        };
+      }
       
       // Generate OAuth2 code
       const authCode = crypto.randomUUID();
       const codeData = {
         rtmToken,
-        userName: userInfo.auth.user.fullname || userInfo.auth.user.username,
-        userId: userInfo.auth.user.id,
+        userName: userInfo.auth.user?.fullname || userInfo.auth.user?.username || 'Unknown User',
+        userId: userInfo.auth.user?.id || 'unknown-id',
         client_id,
         code_challenge,
-        code_challenge_method
+        code_challenge_method,
+        isRealUser: !rtmToken.startsWith('mock-token-')
       };
+      
+      await logger.log('oauth_code_data', {
+        ...codeData,
+        rtmToken: rtmToken.substring(0, 8) + '...'
+      });
       
       await c.env.AUTH_STORE.put(
         `auth_code:${authCode}`, 
@@ -500,7 +533,8 @@ export function createRtmHandler() {
         code: authCode,
         stored_with_ttl: 300,
         has_code_challenge: !!code_challenge,
-        key: `auth_code:${authCode}`
+        key: `auth_code:${authCode}`,
+        is_real_user: codeData.isRealUser
       });
       
       // Clear cookie
@@ -576,7 +610,7 @@ export function createRtmHandler() {
       `);
     }
   });
-
+  
   /**
    * OAuth2 Token Exchange Endpoint
    */

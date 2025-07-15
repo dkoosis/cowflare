@@ -9,7 +9,9 @@ export class RtmApi {
   constructor(apiKey: string, sharedSecret: string) {
     console.log('[RtmApi] Constructor called', {
       hasApiKey: !!apiKey,
-      hasSharedSecret: !!sharedSecret
+      hasSharedSecret: !!sharedSecret,
+      apiKeyLength: apiKey?.length,
+      sharedSecretLength: sharedSecret?.length
     });
     this.apiKey = apiKey;
     this.sharedSecret = sharedSecret;
@@ -22,7 +24,12 @@ export class RtmApi {
     const paramString = sortedKeys.map(key => `${key}${params[key]}`).join('');
     const message = this.sharedSecret + paramString;
     
-    console.log('[RtmApi] Signature message length:', message.length);
+    console.log('[RtmApi] Signature params:', {
+      sortedKeys,
+      paramStringLength: paramString.length,
+      messageLength: message.length,
+      firstParam: sortedKeys[0] ? `${sortedKeys[0]}=${params[sortedKeys[0]]}` : 'none'
+    });
     
     const encoder = new TextEncoder();
     const data = encoder.encode(message);
@@ -57,40 +64,84 @@ export class RtmApi {
       url.searchParams.append(key, value);
     });
 
-    console.log('[RtmApi] Making request to:', url.pathname + url.search.replace(/auth_token=[^&]+/, 'auth_token=[REDACTED]'));
+    console.log('[RtmApi] Making request to:', {
+      url: url.pathname,
+      method,
+      paramCount: Object.keys(allParams).length,
+      hasApiKey: !!allParams.api_key,
+      hasSignature: !!allParams.api_sig
+    });
 
     try {
       const response = await fetch(url.toString());
-      const data = (await response.json()) as RTMResponse<T>;
+      const responseText = await response.text();
+      
+      console.log('[RtmApi] Raw response:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type'),
+        contentLength: responseText.length,
+        preview: responseText.substring(0, 200)
+      });
 
-      console.log('[RtmApi] Response status:', response.status);
-      console.log('[RtmApi] Response data:', {
+      let data: RTMResponse<T>;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[RtmApi] Failed to parse JSON:', {
+          error: parseError,
+          responseText: responseText.substring(0, 500)
+        });
+        throw new Error(`Invalid JSON response from RTM API: ${responseText.substring(0, 100)}...`);
+      }
+
+      console.log('[RtmApi] Parsed response:', {
         stat: data.rsp?.stat,
         hasData: !!data.rsp,
-        error: data.rsp?.err
+        error: data.rsp?.err,
+        dataKeys: data.rsp ? Object.keys(data.rsp).filter(k => k !== 'stat') : [],
+        fullResponse: JSON.stringify(data.rsp).substring(0, 500)
       });
 
       if (data.rsp.stat !== 'ok') {
-        console.error('[RtmApi] RTM API Error:', data.rsp.err);
+        console.error('[RtmApi] RTM API Error:', {
+          error: data.rsp.err,
+          method,
+          params: Object.keys(params)
+        });
         throw new Error(`RTM API Error: ${data.rsp.err?.msg} (${data.rsp.err?.code})`);
       }
 
       return data.rsp;
     } catch (error) {
-      console.error('[RtmApi] Request failed:', error);
+      console.error('[RtmApi] Request failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        method,
+        hasApiKey: !!this.apiKey,
+        hasSharedSecret: !!this.sharedSecret
+      });
       throw error;
     }
   }
 
   async getFrob(): Promise<string> {
     console.log('[RtmApi] getFrob called');
-    const response = await this.makeRequest<{ frob: string }>('rtm.auth.getFrob');
-    console.log('[RtmApi] getFrob response:', { frob: response.frob });
-    return response.frob;
+    try {
+      const response = await this.makeRequest<{ frob: string }>('rtm.auth.getFrob');
+      console.log('[RtmApi] getFrob response:', { 
+        frob: response.frob,
+        frobLength: response.frob?.length,
+        responseKeys: Object.keys(response)
+      });
+      return response.frob;
+    } catch (error) {
+      console.error('[RtmApi] getFrob error:', error);
+      throw error;
+    }
   }
 
   async getAuthUrl(frob: string, perms: 'read' | 'write' | 'delete' = 'delete'): Promise<string> {
-    console.log('[RtmApi] getAuthUrl called:', { frob, perms });
+    console.log('[RtmApi] getAuthUrl called:', { frob, perms, frobLength: frob?.length });
     
     const params = {
       api_key: this.apiKey,
@@ -107,18 +158,89 @@ export class RtmApi {
     url.searchParams.append('api_sig', signature);
 
     const authUrl = url.toString();
-    console.log('[RtmApi] Generated auth URL:', authUrl.replace(frob, '[FROB]'));
+    console.log('[RtmApi] Generated auth URL:', {
+      baseUrl: url.origin + url.pathname,
+      paramCount: url.searchParams.toString().split('&').length,
+      perms,
+      urlLength: authUrl.length
+    });
     return authUrl;
   }
 
-  async getToken(frob: string): Promise<string> {
-    console.log('[RtmApi] getToken called with frob');
-    const response = await this.makeRequest<{ auth: { token: string, user: any } }>('rtm.auth.getToken', { frob });
-    console.log('[RtmApi] getToken response:', {
-      hasToken: !!response.auth?.token,
-      user: response.auth?.user
+  async getToken(frob: string): Promise<{ token: string; auth: any }> {
+    console.log('[RtmApi] getToken called with frob:', {
+      frobLength: frob?.length,
+      frobPrefix: frob?.substring(0, 8)
     });
-    return response.auth.token;
+    
+    try {
+      const response = await this.makeRequest<{ auth: { token: string, user: any } }>('rtm.auth.getToken', { frob });
+      
+      console.log('[RtmApi] getToken FULL response:', {
+        hasAuth: !!response.auth,
+        hasToken: !!response.auth?.token,
+        hasUser: !!response.auth?.user,
+        authKeys: response.auth ? Object.keys(response.auth) : [],
+        userKeys: response.auth?.user ? Object.keys(response.auth.user) : [],
+        tokenLength: response.auth?.token?.length,
+        userId: response.auth?.user?.id,
+        username: response.auth?.user?.username,
+        fullname: response.auth?.user?.fullname,
+        // Log the complete structure for debugging
+        fullAuthStructure: JSON.stringify(response.auth, null, 2)
+      });
+      
+      // Return the full auth object so we can use the user info
+      return {
+        token: response.auth.token,
+        auth: response.auth
+      };
+    } catch (error) {
+      console.error('[RtmApi] getToken error:', {
+        error: error instanceof Error ? error.message : String(error),
+        frob: frob?.substring(0, 8) + '...'
+      });
+      throw error;
+    }
+  }
+
+  // Test method to check if credentials are valid
+  async testCredentials(): Promise<{ valid: boolean; error?: string }> {
+    console.log('[RtmApi] testCredentials called');
+    try {
+      const frob = await this.getFrob();
+      console.log('[RtmApi] testCredentials: Successfully got frob');
+      return { valid: true };
+    } catch (error) {
+      console.error('[RtmApi] testCredentials failed:', error);
+      return { 
+        valid: false, 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // Method to check token validity and get user info
+  async checkToken(authToken: string): Promise<any> {
+    console.log('[RtmApi] checkToken called');
+    try {
+      const response = await this.makeRequest('rtm.auth.checkToken', {
+        auth_token: authToken
+      });
+      
+      console.log('[RtmApi] checkToken response:', {
+        hasAuth: !!response.auth,
+        hasUser: !!response.auth?.user,
+        userId: response.auth?.user?.id,
+        username: response.auth?.user?.username,
+        fullResponse: JSON.stringify(response, null, 2)
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('[RtmApi] checkToken error:', error);
+      throw error;
+    }
   }
 
   async createTimeline(authToken: string): Promise<string> {
@@ -126,14 +248,18 @@ export class RtmApi {
     const response = await this.makeRequest<{ timeline: string }>('rtm.timelines.create', {
       auth_token: authToken
     });
-    console.log('[RtmApi] createTimeline response:', { timeline: response.timeline });
+    console.log('[RtmApi] createTimeline response:', { 
+      timeline: response.timeline,
+      responseKeys: Object.keys(response)
+    });
     return response.timeline;
   }
 
   formatLists(lists: any): string {
     console.log('[RtmApi] formatLists called:', {
       hasLists: !!lists,
-      isArray: Array.isArray(lists)
+      isArray: Array.isArray(lists),
+      listCount: Array.isArray(lists) ? lists.length : 1
     });
     
     if (!lists) return 'No lists found';
@@ -149,7 +275,8 @@ export class RtmApi {
   formatTasks(lists: any): string {
     console.log('[RtmApi] formatTasks called:', {
       hasLists: !!lists,
-      isArray: Array.isArray(lists)
+      isArray: Array.isArray(lists),
+      listCount: Array.isArray(lists) ? lists.length : 1
     });
     
     if (!lists) return 'No tasks found';
@@ -159,26 +286,26 @@ export class RtmApi {
     let totalTasks = 0;
     
     listArray.forEach((list: { id: string, taskseries?: RTMTaskSeries | RTMTaskSeries[] }) => {
-      if (list.taskseries) {
-        const seriesArray = Array.isArray(list.taskseries) ? list.taskseries : [list.taskseries];
+      if (!list.taskseries) return;
+      
+      const seriesArray = Array.isArray(list.taskseries) ? list.taskseries : [list.taskseries];
+      
+      seriesArray.forEach((series: RTMTaskSeries) => {
+        if (!series.task) return;
         
-        seriesArray.forEach((series: RTMTaskSeries) => {
-          const taskArray = Array.isArray(series.task) ? series.task : [series.task];
+        const taskArray = Array.isArray(series.task) ? series.task : [series.task];
+        
+        taskArray.forEach((task: RTMTask) => {
+          if (task.completed) return; // Skip completed tasks
           
-          taskArray.forEach((task: RTMTask) => {
-            totalTasks++;
-            const completed = task.completed !== undefined && task.completed !== '';
-            const priority = task.priority === 'N' ? '' : ` [P${task.priority}]`;
-            const due = task.due ? ` (Due: ${task.due})` : '';
-            const status = completed ? ' ✓' : '';
-            
-            tasks.push(`- ${series.name}${priority}${due}${status} (List: ${list.id}, Series: ${series.id}, Task: ${task.id})`);
-          });
+          tasks.push(`- ${series.name} (List: ${list.id}, Task: ${task.id})`);
+          totalTasks++;
         });
-      }
+      });
     });
-
+    
     console.log('[RtmApi] Formatted', totalTasks, 'tasks');
-    return tasks.length > 0 ? tasks.join('\n') : 'No tasks found';
+    
+    return tasks.length > 0 ? tasks.join('\n') : 'No active tasks found';
   }
 }

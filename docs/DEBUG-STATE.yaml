@@ -6,7 +6,7 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "happy-owl"
-  last_update: "2025-07-14T23:00:00Z"
+  last_update: "2025-07-14T17:00:00Z"
 
 state:
   build: "PASS"
@@ -14,8 +14,8 @@ state:
   tool_execution: "PASS"
   auth_flow: "PASS"
   claude_integration: "FAIL"
-  logging: "PASS"
-  dashboard_display: "FAIL"
+  logging: "INVESTIGATING"
+  authorize_endpoint: "FIXED"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -30,12 +30,7 @@ proven:
 - "oauth_manual_test==success"
 - "oauth_code_generation==working"
 - "dashboard_import==dashboard.ts"
-- "logging_system==working"
-- "oauth_logs_created==true"
-- "claude_redirect_uri==https://claude.ai/api/mcp/auth_callback"
-- "token_exchange==working"
-- "token_storage_format==token:{rtmToken}"
-- "mcp_expects==Authorization:Bearer_header"
+- "authorize_error_returns_json==causes_blank_screen"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -43,52 +38,28 @@ failed:
 - "c.get('debugLogger')->2769"
 - "getUserInfo->2339"
 - "dashboard.txt->2307"
-- "claude_ai_integration->shows_requires_connection"
-- "dashboard_display->not_showing_oauth_logs"
+- "claude_ai_integration->redirects_to_example.com"
+- "authorize_endpoint->returns_json_on_error"
 
 hypotheses:
   h1:
-    desc: "bearer_token_in_fetch_override"
-    test: "override_RtmMCP.fetch()_to_extract_bearer_token"
+    desc: "rtm_api_credentials_missing"
+    test: "check_env_vars_set"
     priority: 1
-    details: "MCP protocol requires Authorization:Bearer on EVERY request. Override fetch() in RtmMCP to extract token, lookup in KV, update DO state"
-    expected: "Claude.ai sends Bearer token -> RtmMCP extracts -> Updates auth state -> Tools work"
-    risk: "McpAgent parent class may not allow fetch() override properly"
   h2:
-    desc: "dashboard_template_issue"
-    test: "increase_kv_limit_to_1000"
+    desc: "claude.ai_sends_wrong_redirect_uri"
+    test: "check_oauth_authorize_params"
     priority: 2
-    status: "testing"
   h3:
-    desc: "do_props_not_passed"
-    test: "verify_do_initialization"
+    desc: "logging_kv_issue"
+    test: "test_kv_directly"
     priority: 3
-    status: "confirmed_issue"
 
 blockers:
-- "claude.ai_shows_requires_connection_after_oauth"
-- "dashboard_auto_refresh_was_annoying"
+- "rtm_api_credentials_may_be_missing"
+- "debug_logs_not_visible"
 
-TESTING_NOW: "Bearer_Token_Extraction_in_DO_Fetch"
-TEST_HYPOTHESIS: "Claude.ai sends Authorization:Bearer header with token on every MCP request. If RtmMCP.fetch() extracts this token and updates auth state, tools should work."
-IF_FAILS: "McpAgent parent class may not allow fetch() override OR Bearer token not sent with every request"
-
-next_action: "deploy:test_bearer_token_extraction"
-
-verification_steps:
-- check: "build_succeeds"
-  command: "npm run build && wrangler deploy"
-- check: "claude_oauth_flow"
-  steps:
-  - "Complete OAuth in Claude.ai"
-  - "Check /debug for mcp_auth_check events"
-  - "Verify Bearer token in logs"
-- check: "rtm_check_auth_status"
-  expect: "Should show authenticated user"
-- check: "timeline_create"
-  expect: "Should work without auth_token param"
-- check: "dashboard_ui"
-  expect: "No auto-refresh, buttons visible"
+next_action: "deploy:authorize_html_error_fix"
 
 code_refs:
   serve: "src/index.ts:L34"
@@ -98,10 +69,7 @@ code_refs:
   dashboard: "src/dashboard.ts"
   test_log: "src/index.ts:L98"
   kv_debug: "src/index.ts:L116"
-  getRecentFlowLogs: "src/debug-logger.ts:L108"
-  createDebugDashboard: "src/debug-logger.ts:L207"
-  fetch_override: "src/rtm-mcp.ts:L58-L95"
-  token_lookup: "src/rtm-mcp.ts:L70"
+  authorize_catch: "src/rtm-handler.ts:L480"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -111,52 +79,30 @@ errors_fixed:
   e5: "getUserInfo->mock_data"
   e6: "dashboard.txt->dashboard.ts"
   e7: "DebugEvent->import_type"
-  e8: "logging_not_working->actually_working"
+  e8: "authorize_json_error->html_error_page"
 
-oauth_test_claude:
-  session: "oauth_p1c1A5dwDfRV7kPvyBWg5q6G1iA5n66YdxWgjiXUfRc"
-  redirect_uri: "https://claude.ai/api/mcp/auth_callback"
-  code: "a0d2d780-b51a-44bf-80b3-f331cbeed354"
-  redirect: "https://claude.ai/api/mcp/auth_callback?code=...&state=..."
-  result: "oauth_success_but_mcp_connection_fails"
+oauth_test:
+  url: "/authorize?response_type=code&client_id=test&redirect_uri=https://example.com/callback&state=test123"
+  frob: "20bb29e2a290a306b28b977f08710e6076db3a6a"
+  token: "9ab201dd..."
+  code: "98d172c2-b8aa-4110-9f2f-ea830c8a212f"
+  redirect: "https://example.com/callback?code=...&state=test123"
+  result: "success_but_wrong_redirect"
 
 current_issues:
-  claude_ai_integration:
-    symptom: "shows_requires_connection_after_oauth"
-    oauth_flow: "completes_successfully"
-    redirect: "correct_to_claude.ai"
-    token_stored: "verified_in_kv"
-    possible_cause: "DO_not_receiving_bearer_token"
-    test_approach: "override_fetch_method_in_RtmMCP"
-  dashboard_display:
-    symptom: "auto_refresh_collapses_views"
-    missing: "export_delete_buttons"
-    fix_applied: "removed_auto_refresh_added_buttons"
-
-testing_now:
-  approach: "bearer_token_extraction_in_do_fetch"
-  files_modified:
-  - "src/rtm-mcp.ts->override_fetch_method"
-  - "src/dashboard.ts->fix_ui_issues"
-  expected_flow:
-  - "Claude.ai_completes_oauth"
-  - "Claude.ai_connects_to_/mcp_with_Bearer_token"
-  - "RtmMCP.fetch()_extracts_token"
-  - "Lookup_token_in_KV_storage"
-  - "Update_DO_auth_state"
-  - "Tools_work_with_auth"
-  risk_factors:
-  - "McpAgent_may_not_support_fetch_override"
-  - "Token_might_not_be_in_every_request"
-  - "DO_lifecycle_might_reset_auth_state"
+  blank_screen_fix:
+    cause: "authorize_endpoint_returns_json_on_error"
+    solution: "return_html_error_page_instead"
+    status: "FIXED"
+  missing_credentials:
+    symptom: "authorize_fails_with_server_error"
+    check: "wrangler_secret_list"
+    required: [ "RTM_API_KEY", "RTM_SHARED_SECRET" ]
 
 sessions:
-- ts: "2025-07-14T23:00:00Z"
-  fixes: [ "bearer_token_fetch_override_attempt", "dashboard_ui_fixes" ]
+- ts: "2025-07-14T17:00:00Z"
+  fixes: [ "blank_screen_diagnosis", "authorize_error_html" ]
   time: 30
-- ts: "2025-07-14T22:30:00Z"
-  fixes: [ "identified_logs_working", "found_claude_correct_redirect" ]
-  time: 15
 - ts: "2025-07-14T16:30:00Z"
   fixes: [ "dashboard_import", "debug_endpoints" ]
   time: 30
@@ -170,13 +116,8 @@ sessions:
   fixes: [ "tool_return", "types" ]
   time: 240
 
-dead_ends:
-- attempt: "dynamic_props_in_serve"
-  reason: "serve()_method_doesnt_support_dynamic_props"
-  learned: "props_must_be_static_or_from_request"
-
 metrics:
-  orientation: [ 0, 120, 30, 5, 15, 30 ]
-  redundant: [ 3, 0, 0, 0, 0, 1 ]
-  hypothesis_success: [ 1, 1, 1, 1, 0 ]
+  orientation: [ 0, 120, 30, 5, 15 ]
+  redundant: [ 3, 0, 0, 0, 0 ]
+  hypothesis_success: [ 1, 1, 1, 1 ]
   forward: true
