@@ -105,7 +105,6 @@ const mcpHandler = RtmMCP.serve('/mcp', {
  * McpAgent's fetch handler, which manages the connection lifecycle.
  */
 // MCP endpoint - this is what Claude.ai connects to after OAuth
-// MCP endpoint - this is what Claude.ai connects to after OAuth
 app.all('/mcp', async (c) => {
   const logger = c.get('debugLogger');
   
@@ -117,113 +116,51 @@ app.all('/mcp', async (c) => {
     hasAuth: !!c.req.header('Authorization')
   });
   
-  // Check if this is an initialize request - these don't require auth
+  // Check if this is an initialize request
   let isInitializeRequest = false;
+  let bodyText: string | undefined;
+  
   if (c.req.method === 'POST') {
     try {
-      const bodyText = await c.req.text();
+      // Read the body to check the method
+      bodyText = await c.req.text();
       const body = JSON.parse(bodyText);
       isInitializeRequest = body.method === 'initialize';
       
-      // Reconstruct request with body
-      c.req.raw = new Request(c.req.raw.url, {
-        method: c.req.raw.method,
-        headers: c.req.raw.headers,
-        body: bodyText
+      await logger.log('mcp_body_check', {
+        method: body.method,
+        isInitialize: isInitializeRequest,
+        bodyLength: bodyText.length
       });
     } catch (e) {
-      // If we can't parse the body, assume it's not initialize
+      await logger.log('mcp_body_parse_error', {
+        error: e instanceof Error ? e.message : String(e)
+      });
     }
   }
   
-  // For non-initialize requests, require auth
-  if (!isInitializeRequest) {
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      await logger.log('mcp_no_auth', {
-        authHeader: authHeader || 'none',
-        isInitialize: false
-      });
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    
-    const token = authHeader.substring(7);
-    
-    // Verify token exists in our store
-    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-    if (!tokenDataJSON) {
-      await logger.log('mcp_invalid_token', {
-        token_prefix: token.substring(0, 8)
-      });
-      return c.json({ error: 'Invalid token' }, 401);
-    }
-    
-    const tokenData = JSON.parse(tokenDataJSON);
-    
-    await logger.log('mcp_token_valid', {
-      userId: tokenData.userId,
-      userName: tokenData.userName,
-      token_prefix: token.substring(0, 8)
-    });
-    
-    // Create Durable Object ID from token
-    const doId = c.env.RTM_MCP.idFromName(token);
-    const stub = c.env.RTM_MCP.get(doId, {
-      locationHint: 'enam'
-    });
-    
-    // Pass the auth data as props to the Durable Object
-    const doRequest = new Request(c.req.raw, {
-      headers: new Headers(c.req.raw.headers)
-    });
-    
-    // Add auth data to headers so DO can access it
-    doRequest.headers.set('X-RTM-Token', token);
-    doRequest.headers.set('X-RTM-UserId', tokenData.userId);
-    doRequest.headers.set('X-RTM-UserName', tokenData.userName);
-    
-    await logger.log('mcp_forwarding_to_do', {
-      doId: doId.toString(),
-      hasToken: !!token,
-      userName: tokenData.userName
-    });
-    
-    try {
-      // Forward to Durable Object
-      const response = await stub.fetch(doRequest);
-      
-      await logger.log('mcp_do_response', {
-        status: response.status,
-        contentType: response.headers.get('content-type'),
-        hasBody: response.headers.get('content-length') !== '0'
-      });
-      
-      return response;
-    } catch (error) {
-      await logger.log('mcp_do_error', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      return c.json({
-        error: 'MCP server error',
-        message: error instanceof Error ? error.message : String(error)
-      }, 500);
-    }
-  } else {
-    // Initialize request - forward without auth
+  // Initialize requests don't need auth - forward directly to DO
+  if (isInitializeRequest) {
     await logger.log('mcp_initialize_request', {
       method: 'initialize'
     });
     
-    // Use a fixed DO ID for unauthenticated initialize
-    // This will need to be associated with the session later
-    const doId = c.env.RTM_MCP.idFromName('mcp-init-' + crypto.randomUUID());
+    // Create a session-specific DO ID
+    const sessionId = crypto.randomUUID();
+    const doId = c.env.RTM_MCP.idFromName(`mcp-init-${sessionId}`);
     const stub = c.env.RTM_MCP.get(doId, {
       locationHint: 'enam'
     });
     
+    // Reconstruct request with the body we read
+    const doRequest = new Request(c.req.raw.url, {
+      method: c.req.raw.method,
+      headers: c.req.raw.headers,
+      body: bodyText
+    });
+    
     try {
-      const response = await stub.fetch(c.req.raw);
+      const response = await stub.fetch(doRequest);
       
       await logger.log('mcp_initialize_response', {
         status: response.status,
@@ -237,10 +174,92 @@ app.all('/mcp', async (c) => {
       });
       
       return c.json({
-        error: 'MCP initialization failed',
-        message: error instanceof Error ? error.message : String(error)
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32000,
+          message: 'MCP initialization failed'
+        }
       }, 500);
     }
+  }
+  
+  // Non-initialize requests require auth
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    await logger.log('mcp_no_auth', {
+      authHeader: authHeader || 'none',
+      isInitialize: false
+    });
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  
+  const token = authHeader.substring(7);
+  
+  // Verify token exists in our store
+  const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+  if (!tokenDataJSON) {
+    await logger.log('mcp_invalid_token', {
+      token_prefix: token.substring(0, 8)
+    });
+    return c.json({ error: 'Invalid token' }, 401);
+  }
+  
+  const tokenData = JSON.parse(tokenDataJSON);
+  
+  await logger.log('mcp_token_valid', {
+    userId: tokenData.userId,
+    userName: tokenData.userName,
+    token_prefix: token.substring(0, 8)
+  });
+  
+  // Create Durable Object ID from token
+  const doId = c.env.RTM_MCP.idFromName(token);
+  const stub = c.env.RTM_MCP.get(doId, {
+    locationHint: 'enam'
+  });
+  
+  // Reconstruct request with body if we read it
+  const doRequest = new Request(c.req.raw.url, {
+    method: c.req.raw.method,
+    headers: new Headers(c.req.raw.headers),
+    body: bodyText || c.req.raw.body
+  });
+  
+  // Add auth data to headers so DO can access it
+  doRequest.headers.set('X-RTM-Token', token);
+  doRequest.headers.set('X-RTM-UserId', tokenData.userId);
+  doRequest.headers.set('X-RTM-UserName', tokenData.userName);
+  
+  await logger.log('mcp_forwarding_to_do', {
+    doId: doId.toString(),
+    hasToken: true,
+    userName: tokenData.userName
+  });
+  
+  try {
+    const response = await stub.fetch(doRequest);
+    
+    await logger.log('mcp_do_response', {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      hasBody: response.headers.get('content-length') !== '0'
+    });
+    
+    return response;
+  } catch (error) {
+    await logger.log('mcp_do_error', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    
+    return c.json({
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32000,
+        message: 'MCP server error'
+      }
+    }, 500);
   }
 });
 
