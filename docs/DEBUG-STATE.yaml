@@ -5,17 +5,19 @@
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "happy-owl"
-  last_update: "2025-07-14T17:00:00Z"
+  deployment: "strong-Minnie Moo"
+  last_update: "2025-07-15T01:00:00Z"
 
 state:
   build: "PASS"
   inspector_connect: "PASS"
   tool_execution: "PASS"
   auth_flow: "PASS"
+  oauth_integration: "PASS"
+  rtm_user_fetch: "PASS"
   claude_integration: "FAIL"
-  logging: "INVESTIGATING"
-  authorize_endpoint: "FIXED"
+  mcp_connection: "FAIL"
+  logging: "PASS"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -30,7 +32,10 @@ proven:
 - "oauth_manual_test==success"
 - "oauth_code_generation==working"
 - "dashboard_import==dashboard.ts"
-- "authorize_error_returns_json==causes_blank_screen"
+- "authorize_error_returns_html==fixed"
+- "rtm_getToken_returns=={token,auth}"
+- "real_user_data==fetched_from_rtm"
+- "claude_redirect_uri==https://claude.ai/api/mcp/auth_callback"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -38,38 +43,41 @@ failed:
 - "c.get('debugLogger')->2769"
 - "getUserInfo->2339"
 - "dashboard.txt->2307"
-- "claude_ai_integration->redirects_to_example.com"
-- "authorize_endpoint->returns_json_on_error"
+- "claude_ai_integration->shows_connect_after_oauth"
+- "mcp_connection->no_requests_after_oauth"
 
 hypotheses:
   h1:
-    desc: "rtm_api_credentials_missing"
-    test: "check_env_vars_set"
+    desc: "mcp_endpoint_not_properly_configured"
+    test: "check_/mcp_handler_and_DO_init"
     priority: 1
   h2:
-    desc: "claude.ai_sends_wrong_redirect_uri"
-    test: "check_oauth_authorize_params"
+    desc: "token_not_passed_to_durable_object"
+    test: "verify_DO_receives_auth_headers"
     priority: 2
   h3:
-    desc: "logging_kv_issue"
-    test: "test_kv_directly"
+    desc: "claude_expects_different_transport"
+    test: "check_streamable_http_implementation"
     priority: 3
+  h4:
+    desc: "resource_url_incorrect_in_token_response"
+    test: "verify_${baseUrl}/mcp_is_correct"
+    priority: 4
 
 blockers:
-- "rtm_api_credentials_may_be_missing"
-- "debug_logs_not_visible"
+- "mcp_connection_not_established_after_oauth"
+- "no_mcp_requests_in_logs"
 
-next_action: "deploy:authorize_html_error_fix"
+next_action: "test:/test/init-mcp"
 
 code_refs:
   serve: "src/index.ts:L34"
   cors: "src/index.ts:L36"
+  mcp_handler: "src/index.ts:L40-60"
   types: "src/rtm-handler.ts:L10-L14"
-  mock_user: "src/rtm-handler.ts:L340-L350"
-  dashboard: "src/dashboard.ts"
-  test_log: "src/index.ts:L98"
-  kv_debug: "src/index.ts:L116"
-  authorize_catch: "src/rtm-handler.ts:L480"
+  getToken: "src/rtm-api.ts:L156-171"
+  rtm_mcp_init: "src/rtm-mcp.ts:L26-40"
+  test_endpoints: "src/index.ts:L98+"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -80,44 +88,50 @@ errors_fixed:
   e6: "dashboard.txt->dashboard.ts"
   e7: "DebugEvent->import_type"
   e8: "authorize_json_error->html_error_page"
+  e9: "getToken_string->getToken_object"
 
 oauth_test:
-  url: "/authorize?response_type=code&client_id=test&redirect_uri=https://example.com/callback&state=test123"
-  frob: "20bb29e2a290a306b28b977f08710e6076db3a6a"
-  token: "9ab201dd..."
-  code: "98d172c2-b8aa-4110-9f2f-ea830c8a212f"
-  redirect: "https://example.com/callback?code=...&state=test123"
-  result: "success_but_wrong_redirect"
+  latest_flow:
+    timestamp: "2025-07-15T00:47:27Z"
+    user_id: "430794"
+    username: "dkoosis"
+    fullname: "David Koosis"
+    isRealUser: true
+    token: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
+    redirect: "https://claude.ai/api/mcp/auth_callback"
+    result: "oauth_success_but_mcp_not_connected"
 
 current_issues:
-  blank_screen_fix:
-    cause: "authorize_endpoint_returns_json_on_error"
-    solution: "return_html_error_page_instead"
-    status: "FIXED"
-  missing_credentials:
-    symptom: "authorize_fails_with_server_error"
-    check: "wrangler_secret_list"
-    required: [ "RTM_API_KEY", "RTM_SHARED_SECRET" ]
+  mcp_connection:
+    symptom: "claude_shows_connect_after_oauth"
+    oauth_status: "completed_successfully"
+    mcp_requests: "none_received"
+    possible_causes:
+    - "resource_url_misconfigured"
+    - "mcp_transport_mismatch"
+    - "durable_object_not_initialized"
+    - "token_not_passed_to_DO"
+
+test_urls:
+- "/test/rtm - verify RTM credentials"
+- "/test/mcp/[token] - test MCP init with token"
+- "/test/init-mcp - test DO initialization"
+- "/debug/tokens - list all tokens"
+- "/debug - main debug dashboard"
 
 sessions:
+- ts: "2025-07-15T01:00:00Z"
+  fixes: [ "rtm_real_user_data", "extensive_logging" ]
+  time: 60
 - ts: "2025-07-14T17:00:00Z"
   fixes: [ "blank_screen_diagnosis", "authorize_error_html" ]
   time: 30
 - ts: "2025-07-14T16:30:00Z"
   fixes: [ "dashboard_import", "debug_endpoints" ]
   time: 30
-- ts: "2025-07-13T22:30:00Z"
-  fixes: [ "hono_types", "oauth_test" ]
-  time: 30
-- ts: "2025-07-13T22:00:00Z"
-  fixes: [ "serve", "cors" ]
-  time: 10
-- ts: "2025-07-13T18:00:00Z"
-  fixes: [ "tool_return", "types" ]
-  time: 240
 
 metrics:
-  orientation: [ 0, 120, 30, 5, 15 ]
-  redundant: [ 3, 0, 0, 0, 0 ]
-  hypothesis_success: [ 1, 1, 1, 1 ]
+  orientation: [ 0, 120, 30, 5, 15, 20 ]
+  redundant: [ 3, 0, 0, 0, 0, 0 ]
+  hypothesis_success: [ 1, 1, 1, 1, 1 ]
   forward: true

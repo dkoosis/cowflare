@@ -25,142 +25,156 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
     console.log('[RtmMCP] Constructor called');
   }
 
+  /**
+   * Handle incoming HTTP requests
+   * This is called by Cloudflare when a request is forwarded to this Durable Object
+   */
+  async fetch(request: Request): Promise<Response> {
+    console.log('[RtmMCP] fetch called', {
+      url: request.url,
+      method: request.method,
+      hasAuthHeader: request.headers.has('X-RTM-Token')
+    });
+    
+    // Extract auth data from headers on first request
+    if (!this.rtmToken && request.headers.has('X-RTM-Token')) {
+      this.rtmToken = request.headers.get('X-RTM-Token') || undefined;
+      this.userId = request.headers.get('X-RTM-UserId') || undefined;
+      this.userName = request.headers.get('X-RTM-UserName') || undefined;
+      
+      console.log('[RtmMCP] Auth data extracted from headers:', {
+        hasToken: !!this.rtmToken,
+        userId: this.userId,
+        userName: this.userName,
+        tokenLength: this.rtmToken?.length
+      });
+      
+      // Update props for the base class
+      this.props = {
+        rtmToken: this.rtmToken,
+        userId: this.userId,
+        userName: this.userName
+      };
+    }
+    
+    // Call the parent class fetch method which handles MCP protocol
+    return super.fetch(request);
+  }
+
+  /**
+   * Initialize the MCP server and register tools
+   */
   async init() {
     console.log('[RtmMCP] Init called');
     console.log('[RtmMCP] Init - this.props:', JSON.stringify(this.props));
     
     // Props may be empty on initial load, auth will come from request headers
     if (!this.props || !this.props.rtmToken) {
-      console.log('[RtmMCP] No initial props/token, will check Authorization header on requests');
-      this.rtmToken = undefined;
-      this.userName = 'Pending Auth';
-      this.userId = 'pending';
+      console.log('[RtmMCP] No initial props/token, will check request headers');
+      // Don't set values here, they'll come from the fetch() method
     } else {
       this.rtmToken = this.props.rtmToken;
       this.userName = this.props.userName || 'Unknown';
       this.userId = this.props.userId || 'unknown';
       
-      console.log('[RtmMCP] Props extracted:', {
+      console.log('[RtmMCP] Props extracted in init:', {
         hasToken: !!this.rtmToken,
         userName: this.userName,
-        userId: this.userId,
-        tokenLength: this.rtmToken?.length
+        userId: this.userId
       });
     }
 
     // Register all RTM tools
-    this.registerTools();
+    this.initializeTools();
     
     console.log('[RtmMCP] Init complete, tools registered');
   }
 
   /**
-   * Override fetch to extract Bearer token from Authorization header
+   * Register all RTM tools with the MCP server
    */
-  async fetch(request: Request): Promise<Response> {
-    // Extract Bearer token from Authorization header
-    const authHeader = request.headers.get('Authorization');
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      console.log('[RtmMCP] Bearer token found:', token.substring(0, 8) + '...');
-      
-      // Look up token data in KV storage
-      const tokenDataJSON = await this.env.AUTH_STORE.get(`token:${token}`);
-      
-      if (tokenDataJSON) {
-        const tokenData = JSON.parse(tokenDataJSON);
-        
-        // Update auth state
-        this.rtmToken = token;
-        this.userName = tokenData.userName;
-        this.userId = tokenData.userId;
-        
-        // Store in DO storage for persistence
-        await this.ctx.storage.put('props', {
-          rtmToken: token,
-          userName: tokenData.userName,
-          userId: tokenData.userId
-        });
-        
-        console.log('[RtmMCP] Auth updated from Bearer token:', {
-          userId: tokenData.userId,
-          userName: tokenData.userName
-        });
-      } else {
-        console.log('[RtmMCP] Bearer token not found in KV storage');
-      }
-    }
-    
-    // Call parent fetch method
-    return super.fetch(request);
-  }
+  private initializeTools() {
+    console.log('[RtmMCP] Registering RTM tools');
 
-  private registerTools() {
-    console.log('[RtmMCP] Registering tools...');
-
-    // Authentication initiation tool
+    // Authentication tool
     this.server.tool(
       'rtm_authenticate',
-      'Initiate authentication with Remember The Milk',
-      {}, // Empty schema for no parameters
+      'Start RTM authentication process',
+      {},  // Empty schema
       async () => {
         console.log('[RtmMCP] Tool called: rtm_authenticate');
-        
-        const baseUrl = this.env.SERVER_URL || 'https://rtm-mcp-server.vcto-6e7.workers.dev';
-        const authUrl = `${baseUrl}/authorize`;
-        
-        return {
-          content: [{
-            type: 'text',
-            text: `Please authenticate with Remember The Milk by visiting: ${authUrl}`
-          }]
-        };
-      }
-    );
-
-    // Authentication completion tool
-    this.server.tool(
-      'rtm_complete_auth',
-      'Complete the authentication process after authorizing with RTM',
-      {
-        code: z.string().describe('The authorization code received after authentication')
-      },
-      async (args: { code: string }) => {
-        console.log('[RtmMCP] Tool called: rtm_complete_auth');
-        
-        if (!args.code) {
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          const frob = await api.getFrob();
+          const authUrl = await api.getAuthUrl(frob);
+          
           return {
             content: [{
               type: 'text',
-              text: 'Error: Authorization code is required'
+              text: `To authenticate with Remember The Milk:\n\n1. Open this URL in a new tab: ${authUrl}\n2. Authorize the application\n3. Return here and use the rtm_complete_auth tool with frob: ${frob}`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error starting authentication: ${error instanceof Error ? error.message : 'Unknown error'}`
             }]
           };
         }
-        
-        return {
-          content: [{
-            type: 'text',
-            text: 'Authentication completed successfully. You can now use RTM tools.'
-          }]
-        };
       }
     );
 
-    // Auth status check tool  
+    // Complete authentication tool
+    this.server.tool(
+      'rtm_complete_auth',
+      'Complete RTM authentication after authorizing in browser',
+      {
+        frob: z.string().describe('The frob token from rtm_authenticate')
+      },
+      async (args) => {
+        console.log('[RtmMCP] Tool called: rtm_complete_auth');
+        try {
+          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
+          const tokenResponse = await api.getToken(args.frob);
+          
+          // Store the auth data
+          this.rtmToken = tokenResponse.token;
+          this.userName = tokenResponse.auth.user.fullname || tokenResponse.auth.user.username;
+          this.userId = tokenResponse.auth.user.id;
+          
+          console.log('[RtmMCP] Auth completed:', {
+            hasToken: !!this.rtmToken,
+            userName: this.userName,
+            userId: this.userId
+          });
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `Authentication successful! Logged in as ${this.userName} (ID: ${this.userId})`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Error completing authentication: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }]
+          };
+        }
+      }
+    );
+
+    // Check authentication status tool
     this.server.tool(
       'rtm_check_auth_status',
-      'Check current authentication status',
-      {},
+      'Check current RTM authentication status',
+      {},  // Empty schema
       async () => {
         console.log('[RtmMCP] Tool called: rtm_check_auth_status');
-        console.log('[RtmMCP] Current auth state:', {
-          hasToken: !!this.rtmToken,
-          userName: this.userName,
-          userId: this.userId
-        });
         
-        const isAuthenticated = !!this.rtmToken && this.rtmToken !== 'pending';
+        const isAuthenticated = !!this.rtmToken;
         
         if (isAuthenticated) {
           return {
@@ -187,22 +201,18 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
       schemas.CreateTimelineSchema.shape,
       async (args) => {
         console.log('[RtmMCP] Tool called: timeline/create');
-        
-        // Use the Bearer token if no token provided in args
-        const authToken = args.auth_token || this.rtmToken;
-        
-        if (!authToken) {
+        if (!args.auth_token) {
           return {
             content: [{
               type: 'text',
-              text: 'Error: Authentication required. Use rtm_authenticate to begin.'
+              text: 'Error: Authentication token is required'
             }]
           };
         }
 
         try {
           const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-          const timeline = await api.createTimeline(authToken);
+          const timeline = await api.createTimeline(args.auth_token);
           
           return {
             content: [{
@@ -228,15 +238,11 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
       schemas.GetTasksSchema.shape,
       async (args) => {
         console.log('[RtmMCP] Tool called: tasks/get');
-        
-        // Use the Bearer token if no token provided in args
-        const authToken = args.auth_token || this.rtmToken;
-        
-        if (!authToken) {
+        if (!args.auth_token) {
           return {
             content: [{
               type: 'text',
-              text: 'Error: Authentication required. Use rtm_authenticate to begin.'
+              text: 'Error: Authentication token is required'
             }]
           };
         }
@@ -265,38 +271,16 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
 
     // Add task tool
     this.server.tool(
-      'tasks/add',
+      'task/add',
       'Add a new task to Remember The Milk',
       schemas.AddTaskSchema.shape,
       async (args) => {
-        console.log('[RtmMCP] Tool called: tasks/add');
-        
-        // Use the Bearer token if no token provided in args
-        const authToken = args.auth_token || this.rtmToken;
-        
-        if (!authToken) {
+        console.log('[RtmMCP] Tool called: task/add');
+        if (!args.auth_token || !args.timeline) {
           return {
             content: [{
               type: 'text',
-              text: 'Error: Authentication required. Use rtm_authenticate to begin.'
-            }]
-          };
-        }
-
-        if (!args.timeline) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: Timeline is required. Use timeline/create first.'
-            }]
-          };
-        }
-
-        if (!args.name) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: Task name is required'
+              text: 'Error: Authentication token and timeline are required'
             }]
           };
         }
@@ -309,7 +293,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
           return {
             content: [{
               type: 'text',
-              text: `Task add functionality is not yet implemented. Would add: "${args.name}"`
+              text: `Add task functionality is not yet implemented. Would add: "${args.name}"`
             }]
           };
         } catch (error) {
@@ -325,29 +309,16 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
 
     // Complete task tool
     this.server.tool(
-      'tasks/complete',
+      'task/complete',
       'Mark a task as completed',
       schemas.CompleteTaskSchema.shape,
       async (args) => {
-        console.log('[RtmMCP] Tool called: tasks/complete');
-        
-        // Use the Bearer token if no token provided in args
-        const authToken = args.auth_token || this.rtmToken;
-        
-        if (!authToken) {
+        console.log('[RtmMCP] Tool called: task/complete');
+        if (!args.auth_token || !args.timeline) {
           return {
             content: [{
               type: 'text',
-              text: 'Error: Authentication required. Use rtm_authenticate to begin.'
-            }]
-          };
-        }
-
-        if (!args.timeline || !args.list_id || !args.taskseries_id || !args.task_id) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: timeline, list_id, taskseries_id, and task_id are all required'
+              text: 'Error: Authentication token and timeline are required'
             }]
           };
         }
@@ -360,7 +331,7 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
           return {
             content: [{
               type: 'text',
-              text: 'Complete task functionality is not yet implemented'
+              text: `Complete task functionality is not yet implemented for task: ${args.task_id}`
             }]
           };
         } catch (error) {
@@ -374,57 +345,6 @@ export class RtmMCP extends McpAgent<Env, {}, { rtmToken?: string; userName?: st
       }
     );
 
-    // Delete task tool
-    this.server.tool(
-      'tasks/delete',
-      'Delete a task',
-      schemas.DeleteTaskSchema.shape,
-      async (args) => {
-        console.log('[RtmMCP] Tool called: tasks/delete');
-        
-        // Use the Bearer token if no token provided in args
-        const authToken = args.auth_token || this.rtmToken;
-        
-        if (!authToken) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: Authentication required. Use rtm_authenticate to begin.'
-            }]
-          };
-        }
-
-        if (!args.timeline || !args.list_id || !args.taskseries_id || !args.task_id) {
-          return {
-            content: [{
-              type: 'text',
-              text: 'Error: timeline, list_id, taskseries_id, and task_id are all required'
-            }]
-          };
-        }
-
-        try {
-          const api = new RtmApi(this.env.RTM_API_KEY, this.env.RTM_SHARED_SECRET);
-          
-          // For now, return a placeholder until deleteTask is implemented
-          // TODO: Implement deleteTask in RtmApi
-          return {
-            content: [{
-              type: 'text',
-              text: 'Delete task functionality is not yet implemented'
-            }]
-          };
-        } catch (error) {
-          return {
-            content: [{
-              type: 'text',
-              text: `Error deleting task: ${error instanceof Error ? error.message : 'Unknown error'}`
-            }]
-          };
-        }
-      }
-    );
-    
     console.log('[RtmMCP] All tools registered');
   }
 }
