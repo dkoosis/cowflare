@@ -1,4 +1,5 @@
 .
+├── add.sh
 ├── claude_cleaned.json
 ├── dlogs.sh
 ├── docs
@@ -27,6 +28,7 @@
 │   ├── rtm-mcp-debug-logs.json
 │   ├── TODO.md
 │   └── tree.txt
+├── endpoints.sh
 ├── inspector-config.json
 ├── package.json
 ├── README.md
@@ -34,6 +36,7 @@
 │   ├── dashboard.ts
 │   ├── debug-logger.ts
 │   ├── index.ts
+│   ├── index.ts.bak
 │   ├── protocol-logger.ts
 │   ├── rtm-api.ts
 │   ├── rtm-handler.ts
@@ -49,9 +52,10 @@
 ├── test
 │   ├── env.d.ts
 │   └── index.spec.ts
+├── test-mcp.sh
 ├── tsconfig.json
 ├── vitest.config.mts
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 49 files
+6 directories, 53 files
