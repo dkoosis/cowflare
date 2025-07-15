@@ -147,8 +147,8 @@ app.all('/mcp', async (c) => {
     
     // Create a session-specific DO ID
     const sessionId = crypto.randomUUID();
-    const doId = c.env.RTM_MCP.idFromName(`mcp-init-${sessionId}`);
-    const stub = c.env.RTM_MCP.get(doId, {
+    const doId = c.env.MCP_OBJECT.idFromName(`mcp-init-${sessionId}`);
+    const stub = c.env.MCP_OBJECT.get(doId, {
       locationHint: 'enam'
     });
     
@@ -214,8 +214,8 @@ app.all('/mcp', async (c) => {
   });
   
   // Create Durable Object ID from token
-  const doId = c.env.RTM_MCP.idFromName(token);
-  const stub = c.env.RTM_MCP.get(doId, {
+  const doId = c.env.MCP_OBJECT.idFromName(token);
+  const stub = c.env.MCP_OBJECT.get(doId, {
     locationHint: 'enam'
   });
   
@@ -262,56 +262,6 @@ app.all('/mcp', async (c) => {
     }, 500);
   }
 });
-
-/**
- * Emergency cleanup endpoint for when KV limits are hit
- * Deletes old debug logs while preserving recent auth data
- */
-app.get('/debug/cleanup', async (c) => {
-  try {
-    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
-    let deletedCount = 0;
-    
-    // List all debug entries
-    const debugList = await c.env.AUTH_STORE.list({ prefix: 'debug:', limit: 1000 });
-    
-    for (const key of debugList.keys) {
-      // Extract timestamp from key: debug:${timestamp}_${sessionId}_${event}
-      const parts = key.name.split(':')[1]?.split('_');
-      if (parts && parts[0]) {
-        const timestamp = parseInt(parts[0]);
-        
-        // Delete if older than cutoff
-        if (timestamp < cutoffTime) {
-          await c.env.AUTH_STORE.delete(key.name);
-          deletedCount++;
-        }
-      }
-    }
-    
-    // Also clean up old protocol logs
-    const protocolList = await c.env.AUTH_STORE.list({ prefix: 'protocol:', limit: 500 });
-    for (const key of protocolList.keys) {
-      // Protocol logs can be more aggressively cleaned
-      await c.env.AUTH_STORE.delete(key.name);
-      deletedCount++;
-    }
-    
-    return c.json({
-      success: true,
-      deleted: deletedCount,
-      message: `Deleted ${deletedCount} old log entries`,
-      cutoff: new Date(cutoffTime).toISOString()
-    });
-  } catch (error) {
-    return c.json({
-      error: 'Cleanup failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, 500);
-  }
-});
-
-// Add these to src/index.ts to debug the MCP connection
 
 // Check what tokens we have and their MCP status
 app.get('/debug/tokens', async (c) => {
