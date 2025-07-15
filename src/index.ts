@@ -3,7 +3,6 @@
  * @description Main entry point for the Cowflare RTM MCP worker.
  * This file sets up the Hono web server, configures middleware for logging and
  * CORS, and defines all the necessary routes for the MCP protocol,
-
  * authentication, health checks, and debugging.
  */
 
@@ -17,20 +16,11 @@ import type { DebugEvent } from './debug-logger';
 
 // --- Constants and Configuration ---
 
-/**
- * A type definition for Hono's context variables, ensuring type safety
- * for custom middleware values like the debug logger.
- */
 type Variables = {
   debugLogger: DebugLogger;
   debugSessionId: string;
 };
 
-/**
- * Generates a memorable, human-readable name for each deployment instance
- * based on the current time, aiding in identifying specific worker versions.
- * @returns A string in the format "adjective-animal".
- */
 const generateDeploymentName = (): string => {
   const adjectives = ['swift', 'bright', 'calm', 'bold', 'wise', 'clean', 'sharp', 'quick', 'brave', 'clear', 'fresh', 'cool', 'smart', 'strong', 'kind', 'gentle', 'happy', 'lively', 'neat', 'eager', 'zesty', 'vivid', 'radiant', 'charming', 'graceful'];
   const animals = ['Holstein', 'Jersey', 'Angus', 'Guernsey', 'milk', 'butter', 'cheese', 'cream', 'moo', 'Elsie', 'Clarabelle', 'Ayrshire', 'Brown Swiss', 'Hereford', 'Wagyu', 'Babe the Blue Ox', 'Ferdinand', 'Minnie Moo', 'Pauline Wayne', "Mrs. O'Leary", 'Simmental'];
@@ -44,7 +34,6 @@ let deploymentName: string | null = null;
 let deploymentTime: string | null = null;
 
 const getDeploymentInfo = () => {
-  // Only generate the name and time on the first call
   if (!deploymentName || !deploymentTime) {
     deploymentName = generateDeploymentName();
     deploymentTime = new Date().toISOString();
@@ -55,17 +44,12 @@ const getDeploymentInfo = () => {
 
 // --- Hono App Initialization ---
 
-/**
- * The main Hono application instance.
- * It's typed with the environment bindings (`Env`) and custom variables (`Variables`)
- * to provide end-to-end type safety.
- */
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // --- Middleware Configuration ---
 
-app.use('*', withDebugLogging); //
-app.use('*', cors({ //
+app.use('*', withDebugLogging);
+app.use('*', cors({
   origin: ['http://localhost:*', 'https://*.claude.ai', 'https://claude.ai'],
   credentials: true,
   allowMethods: ['GET', 'POST', 'OPTIONS'],
@@ -75,7 +59,6 @@ app.use('*', cors({ //
 
 // --- Route Definitions ---
 
-// ADDED: A root handler to prevent 404 errors at the base URL.
 app.get('/', (c) => {
     const { deploymentName, deploymentTime } = getDeploymentInfo();
     return c.json({
@@ -85,30 +68,17 @@ app.get('/', (c) => {
     });
 });
 
-/**
- * Mounts the RTM-specific authentication handler, which provides the
- * necessary endpoints for our custom, non-OAuth authentication flow.
- */
 const rtmHandler = createRtmHandler();
-app.route('/auth', rtmHandler); // Changed from '/' to '/auth' for clarity
+app.route('/auth', rtmHandler);
 
-// REMOVED: The unused mcpHandler created with RtmMCP.serve().
-// This code was dead and conflicted with our final architecture.
-
-// REFACTORED: The entire /mcp handler is restructured to be safer and clearer.
 app.all('/mcp', async (c) => {
   const logger = c.get('debugLogger');
   let doId: DurableObjectId;
-  let token: string | undefined;
-  let tokenData: { userId: string; userName: string } | undefined;
 
-  // MCP requests must be POST
   if (c.req.method !== 'POST') {
     return c.text('Method Not Allowed', 405);
   }
 
-  // FIXED: The critical bug where the body was read twice is resolved here.
-  // We read the body ONCE and use the resulting text for all subsequent operations.
   const bodyText = await c.req.text();
   let body;
   try {
@@ -118,51 +88,43 @@ app.all('/mcp', async (c) => {
     return c.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400);
   }
 
-  await logger.log('mcp_request', {
-    method: body.method,
-    url: c.req.url,
+  await logger.log('mcp_request', { method: body.method, url: c.req.url });
+
+  const doRequest = new Request(c.req.url, {
+    method: 'POST',
+    headers: new Headers(c.req.raw.headers),
+    body: bodyText,
   });
-  
-  // Logic for the unauthenticated 'initialize' handshake
+
   if (body.method === 'initialize') {
     const sessionId = crypto.randomUUID();
     doId = c.env.MCP_OBJECT.idFromName(`mcp-session-${sessionId}`);
     await logger.log('mcp_initialize_request', { doId: doId.toString() });
   } else {
-    // Logic for all other, authenticated methods
     const authHeader = c.req.header('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       await logger.log('mcp_no_auth', { method: body.method });
       return c.json({ error: 'Unauthorized' }, 401);
     }
     
-    token = authHeader.substring(7);
+    const token = authHeader.substring(7);
     const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-    
     if (!tokenDataJSON) {
       await logger.log('mcp_invalid_token', { token_prefix: token.substring(0, 8) });
       return c.json({ error: 'Invalid token' }, 401);
     }
 
-    tokenData = JSON.parse(tokenDataJSON);
+    const tokenData = JSON.parse(tokenDataJSON);
     doId = c.env.MCP_OBJECT.idFromName(token);
-    await logger.log('mcp_token_valid', { userId: tokenData.userId, doId: doId.toString() });
-  }
-
-  // Common logic to forward the request to the correct Durable Object
-  const stub = c.env.MCP_OBJECT.get(doId);
-  const doRequest = new Request(c.req.url, {
-    method: 'POST',
-    headers: new Headers(c.req.headers),
-    body: bodyText, // Always use the preserved body text
-  });
-
-  // Add user context to headers for authenticated requests
-  if (tokenData && token) {
+    
     doRequest.headers.set('X-RTM-Token', token);
     doRequest.headers.set('X-RTM-UserId', tokenData.userId);
     doRequest.headers.set('X-RTM-UserName', tokenData.userName);
+
+    await logger.log('mcp_token_valid', { userId: tokenData.userId, doId: doId.toString() });
   }
+
+  const stub = c.env.MCP_OBJECT.get(doId);
 
   try {
     const response = await stub.fetch(doRequest);
@@ -173,30 +135,202 @@ app.all('/mcp', async (c) => {
     return c.json({ jsonrpc: '2.0', id: body.id || null, error: { code: -32000, message: 'MCP server error' } }, 500);
   }
 });
+// In src/index.ts
 
-// ADDED: The debug dashboard route is restored.
+// Replace the app.get('/debug', ...) handler with this corrected version
+
 app.get('/debug', (c) => {
-    const logger = c.get('debugLogger');
-    const { deploymentName, deploymentTime } = getDeploymentInfo();
-    return createDebugDashboard(logger, deploymentName, deploymentTime);
+  // 1. Get the deployment info at request time.
+  const { deploymentName, deploymentTime } = getDeploymentInfo();
+  
+  // 2. Call the factory with the fresh data to create the handler.
+  const specificDashboardHandler = createDebugDashboard(deploymentName, deploymentTime);
+  
+  // 3. Immediately call the handler to get the final Response.
+  return specificDashboardHandler(c);
 });
 
-app.get('/debug/tokens', async (c) => { //
+app.get('/debug/tokens', async (c) => {
   const list = await c.env.AUTH_STORE.list({ prefix: 'token:' });
   const tokens = [];
   
   for (const key of list.keys) {
     const data = await c.env.AUTH_STORE.get(key.name);
     if (data) {
+      const tokenData = JSON.parse(data);
       tokens.push({
         token_prefix: key.name.substring(6, 14) + '...',
-        ...JSON.parse(data),
+        ...tokenData,
+        mcp_url: `${c.env.SERVER_URL || `https://${c.req.header('host')}`}/mcp`
       });
     }
   }
-  return c.json({ tokens, count: tokens.length });
+  
+  return c.json({
+    tokens,
+    count: tokens.length,
+    server_url: c.env.SERVER_URL || `https://${c.req.header('host')}`
+  });
+});
+
+app.post('/debug/mcp-test', async (c) => {
+  const body = await c.req.text();
+  const headers = Object.fromEntries(c.req.raw.headers.entries());
+  
+  return c.json({
+    received: {
+      body,
+      headers,
+      method: c.req.method
+    },
+    expected_format: {
+      jsonrpc: "2.0",
+      method: "initialize",
+      params: { protocolVersion: "1.0", capabilities: {} },
+      id: 1
+    }
+  });
+});
+
+app.get('/test/init-mcp', async (c) => {
+  const list = await c.env.AUTH_STORE.list({ prefix: 'token:', limit: 1 });
+  if (list.keys.length === 0) {
+    return c.json({ error: 'No tokens found' }, 404);
+  }
+  
+  const tokenKey = list.keys[0].name;
+  const token = tokenKey.substring(6);
+  const tokenDataJSON = await c.env.AUTH_STORE.get(tokenKey);
+  const tokenData = JSON.parse(tokenDataJSON!);
+  
+  const doId = c.env.MCP_OBJECT.idFromName(token);
+  const stub = c.env.MCP_OBJECT.get(doId);
+  
+  const testRequest = new Request('https://do.test/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-RTM-Token': token,
+      'X-RTM-UserId': tokenData.userId,
+      'X-RTM-UserName': tokenData.userName
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: { protocolVersion: '1.0', capabilities: {} },
+      id: 1
+    })
+  });
+  
+  try {
+    const response = await stub.fetch(testRequest);
+    const result = await response.json();
+    return c.json({
+      token_info: {
+        token_prefix: token.substring(0, 8) + '...',
+        userName: tokenData.userName,
+        userId: tokenData.userId
+      },
+      do_id: doId.toString(),
+      init_response: {
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: result
+      }
+    });
+  } catch (error) {
+    return c.json({
+      error: 'DO initialization failed',
+      message: error instanceof Error ? error.message : String(error),
+      token_prefix: token.substring(0, 8) + '...'
+    }, 500);
+  }
+});
+
+app.get('/test/mcp/:token', async (c) => {
+  const token = c.req.param('token');
+  const logger = c.get('debugLogger');
+  
+  await logger.log('mcp_test_start', {
+    token_prefix: token.substring(0, 8),
+    endpoint: '/test/mcp'
+  });
+  
+  try {
+    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+    if (!tokenDataJSON) {
+      return c.json({ error: 'Token not found', token_prefix: token.substring(0, 8) }, 404);
+    }
+    
+    const tokenData = JSON.parse(tokenDataJSON);
+    const doId = c.env.MCP_OBJECT.idFromName(token);
+    const stub = c.env.MCP_OBJECT.get(doId);
+    
+    const mcpTestResponse = await stub.fetch('https://do.test/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: { protocolVersion: '1.0', capabilities: {} },
+        id: 1
+      })
+    });
+    
+    const mcpResult = await mcpTestResponse.json();
+    
+    await logger.log('mcp_test_success', {
+      token_data: tokenData,
+      mcp_status: mcpTestResponse.status,
+      mcp_result: mcpResult
+    });
+    
+    return c.json({
+      token_valid: true,
+      token_data: {
+        userName: tokenData.userName,
+        userId: tokenData.userId,
+        created_at: tokenData.created_at
+      },
+      durable_object: { id: doId.toString() },
+      mcp_test: {
+        status: mcpTestResponse.status,
+        result: mcpResult
+      }
+    });
+    
+  } catch (error) {
+    await logger.log('mcp_test_error', {
+      error: error instanceof Error ? error.message : String(error),
+      token_prefix: token.substring(0, 8)
+    });
+    
+    return c.json({
+      error: 'MCP test failed',
+      message: error instanceof Error ? error.message : String(error)
+    }, 500);
+  }
+});
+
+app.get('/mcp/capabilities', async (c) => {
+  return c.json({
+    mcp_version: '1.0',
+    server_info: {
+      name: 'rtm-mcp-server',
+      version: '2.5.0'
+    },
+    capabilities: {
+      tools: true,
+      resources: false,
+      prompts: false
+    },
+    transport: {
+      type: 'http',
+      supports_streaming: true
+    }
+  });
 });
 
 // --- Exports ---
-export default app; //
-export { RtmMCP }; //
+export default app;
+export { RtmMCP };

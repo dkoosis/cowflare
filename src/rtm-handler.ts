@@ -57,6 +57,13 @@ export function createRtmHandler() {
   app.use('*', withDebugLogging);
 
   /**
+   * Health check endpoint
+   */
+  app.get('/health', (c) => {
+    return c.json({ status: 'ok', service: 'rtm-auth-handler' });
+  });
+
+  /**
    * OAuth2 Authorization Endpoint
    * Returns HTML waiting page - does NOT redirect to RTM
    */
@@ -81,8 +88,6 @@ export function createRtmHandler() {
       code_challenge_method
     } = c.req.query();
 
-    // FIX: Claude.ai sends example.com as redirect_uri
-    // We need to detect and replace it with the correct Claude.ai callback
     const originalRedirectUri = redirect_uri;
     
     // Check if this is coming from Claude.ai
