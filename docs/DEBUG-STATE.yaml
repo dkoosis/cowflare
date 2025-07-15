@@ -1,12 +1,9 @@
 # MCP-DEBUG-STATE-V1
-# Machine-optimized debugging state for Claude
-# Update after each session with findings
-
 meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "strong-Minnie Moo"
-  last_update: "2025-07-15T01:00:00Z"
+  last_update: "2025-07-15T02:35:00Z"
 
 state:
   build: "PASS"
@@ -18,6 +15,8 @@ state:
   claude_integration: "FAIL"
   mcp_connection: "FAIL"
   logging: "PASS"
+  rtm_mcp_protocol: "PASS"
+  index_mcp_handler: "FAIL"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -36,6 +35,11 @@ proven:
 - "rtm_getToken_returns=={token,auth}"
 - "real_user_data==fetched_from_rtm"
 - "claude_redirect_uri==https://claude.ai/api/mcp/auth_callback"
+- "rtm_mcp.sessionInitialized==true"
+- "rtm_mcp.fetch->!sessionInitialized->bypass_auth"
+- "index.ts:/mcp->ALL_require_bearer"
+- "agents/mcp==local_library"
+- "this.server.tool()!=registerTool()"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -45,39 +49,25 @@ failed:
 - "dashboard.txt->2307"
 - "claude_ai_integration->shows_connect_after_oauth"
 - "mcp_connection->no_requests_after_oauth"
+- "index_mcp_handler->blocks_initialize->-32000"
 
 hypotheses:
   h1:
-    desc: "mcp_endpoint_not_properly_configured"
-    test: "check_/mcp_handler_and_DO_init"
+    desc: "index_blocks_initialize->fix_auth_check"
+    test: "artifact:mcp-handler-fix"
     priority: 1
-  h2:
-    desc: "token_not_passed_to_durable_object"
-    test: "verify_DO_receives_auth_headers"
-    priority: 2
-  h3:
-    desc: "claude_expects_different_transport"
-    test: "check_streamable_http_implementation"
-    priority: 3
-  h4:
-    desc: "resource_url_incorrect_in_token_response"
-    test: "verify_${baseUrl}/mcp_is_correct"
-    priority: 4
 
-blockers:
-- "mcp_connection_not_established_after_oauth"
-- "no_mcp_requests_in_logs"
-
-next_action: "test:/test/init-mcp"
+next_action: "apply:mcp-handler-fix->index.ts:L50-86"
 
 code_refs:
   serve: "src/index.ts:L34"
   cors: "src/index.ts:L36"
-  mcp_handler: "src/index.ts:L40-60"
-  types: "src/rtm-handler.ts:L10-L14"
-  getToken: "src/rtm-api.ts:L156-171"
-  rtm_mcp_init: "src/rtm-mcp.ts:L26-40"
-  test_endpoints: "src/index.ts:L98+"
+  mcp_broken: "src/index.ts:L54-58"
+  mcp_fix: "artifact:mcp-handler-fix"
+  rtm_fetch: "src/rtm-mcp.ts:L36-76"
+  rtm_init: "src/rtm-mcp.ts:L81-84"
+  rtm_tools: "src/rtm-mcp.ts:L93-145"
+  test_init: "src/index.ts:L298+"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -89,95 +79,28 @@ errors_fixed:
   e7: "DebugEvent->import_type"
   e8: "authorize_json_error->html_error_page"
   e9: "getToken_string->getToken_object"
+  e10: "rtm_mcp->sessionInitialized"
+  e11: "index_mcp->check_body.method"
 
-oauth_test:
-  latest_flow:
-    timestamp: "2025-07-15T00:47:27Z"
-    user_id: "430794"
-    username: "dkoosis"
-    fullname: "David Koosis"
-    isRealUser: true
-    token: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
-    redirect: "https://claude.ai/api/mcp/auth_callback"
-    result: "oauth_success_but_mcp_not_connected"
-
-current_issues:
-  mcp_connection:
-    symptom: "claude_shows_connect_after_oauth"
-    oauth_status: "completed_successfully"
-    mcp_requests: "none_received"
-    possible_causes:
-    - "resource_url_misconfigured"
-    - "mcp_transport_mismatch"
-    - "durable_object_not_initialized"
-    - "token_not_passed_to_DO"
-
-test_urls:
-- "/test/rtm - verify RTM credentials"
-- "/test/mcp/[token] - test MCP init with token"
-- "/test/init-mcp - test DO initialization"
-- "/debug/tokens - list all tokens"
-- "/debug - main debug dashboard"
+test_results:
+  oauth: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
+  user_id: "430794"
+  redirect: "https://claude.ai/api/mcp/auth_callback"
+  mcp_after_oauth: "FAIL:-32000"
 
 sessions:
+- ts: "2025-07-15T02:35:00Z"
+  fixes: [ "index_mcp_root_cause" ]
+  time: 95
 - ts: "2025-07-15T01:00:00Z"
-  fixes: [ "rtm_real_user_data", "extensive_logging" ]
+  fixes: [ "rtm_user_data", "logs" ]
   time: 60
 - ts: "2025-07-14T17:00:00Z"
-  fixes: [ "blank_screen_diagnosis", "authorize_error_html" ]
-  time: 30
-- ts: "2025-07-14T16:30:00Z"
-  fixes: [ "dashboard_import", "debug_endpoints" ]
+  fixes: [ "blank_screen", "auth_html" ]
   time: 30
 
 metrics:
-  orientation: [ 0, 120, 30, 5, 15, 20 ]
-  redundant: [ 3, 0, 0, 0, 0, 0 ]
-  hypothesis_success: [ 1, 1, 1, 1, 1 ]
+  orientation: [ 0, 120, 30, 5, 15, 20, 10 ]
+  redundant: [ 3, 0, 0, 0, 0, 0, 0 ]
+  hypothesis_success: [ 1, 1, 1, 1, 1, 1 ]
   forward: true
-
-### This was added by Gemini - please assess
-Of course. It's a great idea to create a "save point" for our debugging session.
-
-Here is a detailed prompt that encapsulates our entire conversation, analysis, and next steps, including the reminder about our agreed-upon strategy. You can use this to resume our work later today.
-
-Prompt to Resume cowflare Debugging Session
-Goal: Fix the MCP (Model Context Protocol) connection failure in the cowflare Cloudflare Worker project.
-
-Context: The project implements an MCP server for Remember The Milk (RTM). The authentication flow uses a custom OAuth 2.0 adapter to handle RTM's desktop-style authentication. After a user successfully authenticates and the client (Claude.ai) receives a token, the subsequent attempt to connect to the /mcp endpoint fails immediately.
-
-Analysis & Key Findings:
-
-OAuth Flow is Working: The entire OAuth 2.0 flow is successful. The client receives a valid access token. The code for this is primarily in rtm-handler.ts.
-
-Connection Failure: The client connects to the /mcp endpoint but is immediately disconnected with MCP error -32000: Connection closed.
-
-Root Cause Identified (Protocol Violation): The failure is caused by a protocol violation in the rtm-mcp.ts Durable Object. The custom fetch method in the RtmMCP class attempts to extract authentication headers from the initial request. This is incorrect because the MCP protocol requires the first message in any session to be an unauthenticated initialize request to perform a handshake. The server must handle this handshake before requiring authentication.
-
-Dependency Clarification: The project uses a local or private agents/mcp library, not a public npm package like @cloudflare/workers-mcp-agent-plugin-core. The solution must be implemented using the available exports from this existing library.
-
-State of the Code:
-
-rtm-mcp.ts (The Problem File): This file defines the RtmMCP Durable Object agent. Its fetch method contains the protocol violation. The rest of the file correctly defines the MCP server and its tools (e.g., task/add, timeline/create).
-
-rtm-handler.ts (The OAuth Handler): This file defines the Hono application that handles the OAuth routes (/authorize, /token, etc.). This part of the system is working correctly and is separate from the MCP session handling.
-
-Reminder on Protocol Adherence Strategy:
-We agreed that implementing a heavy, manual Finite State Machine (FSM) is unnecessary. The best approach is a lightweight, two-phase strategy:
-
-Leverage the Library: The underlying agents/mcp library should handle the complexities of the "initialized" session state (i.e., managing the stream of authenticated requests).
-
-Handle the Handshake Explicitly: Our own code must only handle the "uninitialized" state. This involves a simple, one-time check in our fetch method: if the incoming message is method: "initialize", we process the handshake. For all other methods, we enforce our custom authentication logic before handing control over to the library's session manager. This avoids a complex if/then loop while ensuring we are protocol-compliant.
-
-Next Action Required:
-The immediate task is to refactor the fetch method in rtm-mcp.ts to be protocol-compliant. The refactored code must:
-
-Correctly handle a "Streamable HTTP" connection using the components available in the agents/mcp library.
-
-Inspect the first message from the client. If the method is initialize, it must be processed without authentication.
-
-For all subsequent messages, it must enforce authentication by checking for the X-RTM-Token header.
-
-Route all valid, authenticated messages to the existing this.server.handle() method for tool execution.
-
-Crucially, preserve all existing tool definitions and other logic within the RtmMCP class from the original rtm-mcp.ts file.
