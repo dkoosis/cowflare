@@ -4,6 +4,7 @@
 ├── docs
 │   ├── _index.md
 │   ├── adr-architecture-core.md
+│   ├── adr-architecture-rtm-mcp.md
 │   ├── adr-architecture-transport-hybrid.md
 │   ├── adr-auth-rtm-desktop-flow.md
 │   ├── adr-client-web-first.md
@@ -15,9 +16,11 @@
 │   ├── DEBUG-STATE-RECIPE.yaml
 │   ├── DEBUG-STATE.yaml
 │   ├── reference
+│   │   ├── cf_client-connection.ts
+│   │   ├── cf_client.ts
+│   │   ├── cf_do-oauth-client-provider.ts
 │   │   ├── cf_index.ts
-│   │   ├── cloudflare_agent.ts
-│   │   ├── do_auth.ts
+│   │   ├── cf_mcp-index.ts
 │   │   ├── llms-full.txt
 │   │   ├── schema.ts
 │   │   └── ts-sdk.md
@@ -51,4 +54,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 46 files
+6 directories, 49 files

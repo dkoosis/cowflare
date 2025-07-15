@@ -85,22 +85,6 @@ const rtmHandler = createRtmHandler();
 app.route('/', rtmHandler);
 
 /**
- * MCP (Model Context Protocol) Handler
- * This is the core of the worker, handling all communication with the MCP client.
- * It uses `serve` to correctly implement the streaming transport
- * required by the protocol.
- */
-const mcpHandler = RtmMCP.serve('/mcp', {
-    binding: 'MCP_OBJECT', // The name of the Durable Object binding in wrangler.toml
-    corsOptions: {
-        origin: 'http://localhost:*, https://*.claude.ai, https://claude.ai',
-        methods: 'GET, POST, OPTIONS',
-        headers: 'Content-Type, Authorization, Mcp-Session-Id',
-        exposeHeaders: 'Mcp-Session-Id, Location'
-    }
-});
-
-/**
  * The MCP route endpoint. All requests to `/mcp/*` are forwarded to the
  * McpAgent's fetch handler, which manages the connection lifecycle.
  */
