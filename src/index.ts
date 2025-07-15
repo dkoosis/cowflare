@@ -106,7 +106,7 @@ app.all('/mcp', async (c) => {
     body: bodyText,
   });
 
-  const isBypassRequest = body.method === 'initialize' || body.method === 'tools/list' || body.method?.startsWith('tools/call');
+  const isBypassRequest = body.method === 'initialize';
 
   if (isBypassRequest) {
     const sessionId = crypto.randomUUID();
