@@ -106,48 +106,38 @@ app.all('/mcp', async (c) => {
     body: bodyText,
   });
 
-  const isBypassRequest = body.method === 'initialize';
+  // All requests now require authentication
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    await logger.log('mcp_no_auth', { method: body.method });
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  
+  const token = authHeader.substring(7);
+  const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
+  if (!tokenDataJSON) {
+    await logger.log('mcp_invalid_token', { token_prefix: token.substring(0, 8) });
+    return c.json({ error: 'Invalid token' }, 401);
+  }
 
-  if (isBypassRequest) {
+  const tokenData = JSON.parse(tokenDataJSON);
+  
+  // For initialize requests, create a new session-specific DO
+  if (body.method === 'initialize') {
     const sessionId = crypto.randomUUID();
     doId = c.env.MCP_OBJECT.idFromName(`mcp-session-${sessionId}`);
-    
-    // Check for auth header even in bypass mode to pass context if available
-    const authHeader = c.req.header('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-      if (tokenDataJSON) {
-        const tokenData = JSON.parse(tokenDataJSON);
-        doRequest.headers.set('X-RTM-Token', token);
-        doRequest.headers.set('X-RTM-UserId', tokenData.userId);
-        doRequest.headers.set('X-RTM-UserName', tokenData.userName);
-      }
-    }
+    await logger.log('mcp_initialize_request', { doId: doId.toString(), userId: tokenData.userId });
   } else {
-    // This else block handles all other, normally authenticated requests
-    const authHeader = c.req.header('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      await logger.log('mcp_no_auth', { method: body.method });
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    
-    const token = authHeader.substring(7);
-    const tokenDataJSON = await c.env.AUTH_STORE.get(`token:${token}`);
-    if (!tokenDataJSON) {
-      await logger.log('mcp_invalid_token', { token_prefix: token.substring(0, 8) });
-      return c.json({ error: 'Invalid token' }, 401);
-    }
-
-    const tokenData = JSON.parse(tokenDataJSON);
+    // For other requests, use the token-based DO
     doId = c.env.MCP_OBJECT.idFromName(token);
-    
-    doRequest.headers.set('X-RTM-Token', token);
-    doRequest.headers.set('X-RTM-UserId', tokenData.userId);
-    doRequest.headers.set('X-RTM-UserName', tokenData.userName);
-
-    await logger.log('mcp_token_valid', { userId: tokenData.userId, doId: doId.toString() });
   }
+  
+  // Always pass auth context to the DO
+  doRequest.headers.set('X-RTM-Token', token);
+  doRequest.headers.set('X-RTM-UserId', tokenData.userId);
+  doRequest.headers.set('X-RTM-UserName', tokenData.userName);
+
+  await logger.log('mcp_token_valid', { userId: tokenData.userId, doId: doId.toString() });
 
   const stub = c.env.MCP_OBJECT.get(doId);
 

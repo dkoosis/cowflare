@@ -4,7 +4,7 @@ meta:
   goal: "claude.ai->rtm_tasks"
   endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
   deployment: "clear-Holstein"
-  last_update: "2025-07-15T22:00:00Z"
+  last_update: "2025-07-15T23:30:00Z"
 
 state:
   build: "PASS"
@@ -14,11 +14,12 @@ state:
   oauth_integration: "PASS"
   rtm_user_fetch: "PASS"
   rtm_api_integration: "PASS"
-  claude_integration: "UNTESTED"
+  claude_integration: "PENDING_TEST"
   mcp_connection: "PASS"
   logging: "PASS"
   rtm_mcp_protocol: "PASS"
   index_mcp_handler: "PASS"
+  auth_bypass_removed: "DONE"
 
 proven:
 - "rtm_auth!=oauth2_standard"
@@ -55,10 +56,9 @@ proven:
 - "auth_bypass->enables_inspector_testing"
 - "X-RTM-Token_headers->pass_auth_to_DO"
 - "rtm_getTasks()->returns_real_data"
-- "inspector->connects_with_bearer_token"
-- "initialize->requires_clientInfo"
-- "/auth/complete-auth->correct_route"
-- "token:9ab201dd->David_Koosis_430794"
+- "inspector->connects_with_bearer"
+- "auth_bypass->REMOVED_2025-07-15T23:30:00Z"
+- "mcp_initialize->requires_bearer_token"
 
 failed:
 - "serveStreamableHttp->2339"
@@ -84,27 +84,31 @@ hypotheses:
     test: "add_mcp_server_in_claude"
     priority: 1
   h2:
-    desc: "remove_auth_bypass->production_ready"
-    test: "revert_line_107"
+    desc: "mcp_full_flow->should_work_production"
+    test: "deploy_and_test_claude"
     priority: 2
+  h3:
+    desc: "tools_should_execute->after_auth"
+    test: "rtm_getTasks_in_claude"
+    priority: 3
 
-next_action: "remove_auth_bypass->test_claude"
+next_action: "deploy->test_claude_integration"
 
 code_refs:
   serve: "src/index.ts:L34"
   cors: "src/index.ts:L36"
-  mcp_handler: "src/index.ts:L54-155"
+  mcp_handler: "src/index.ts:L84-147"
   rtm_fetch: "src/rtm-mcp.ts:L36-76"
   rtm_init: "src/rtm-mcp.ts:L81-84"
   rtm_tools: "src/rtm-mcp.ts:L93-145"
   imports: "src/rtm-mcp.ts:L2-3"
   tool_reg: "src/rtm-mcp.ts:L69-180"
   inline_schemas: "src/rtm-mcp.ts:L86-91"
-  auth_bypass: "src/index.ts:L107-119"
+  auth_bypass_removed: "src/index.ts:L107-135"
   rtm_mcp_fetch: "src/rtm-mcp.ts:L30-96"
   in_memory_transport: "src/rtm-mcp.ts:L49-90"
   oauth_fix: "src/rtm-handler.ts:L140"
-  debug_tokens: "src/index.ts:L195"
+  debug_tokens: "src/index.ts:L154"
 
 errors_fixed:
   e1: "tool_response->wrap:{content:[...]}"
@@ -130,46 +134,3 @@ errors_fixed:
   e21: "McpAgent_extends->removed_inheritance"
   e22: "DurableObject_global->direct_class"
   e23: "McpServer.fetch->InMemoryTransport"
-  e24: "requestBody_unknown->cast_JSONRPCMessage"
-  e25: "complete_auth_route->add_/auth_prefix"
-
-test_results:
-  oauth: "9ab201dd80a641ca348f859d5cf545c2dc21d5e8"
-  user_id: "430794"
-  redirect: "https://claude.ai/api/mcp/auth_callback"
-  mcp_after_oauth: "FAIL:-32000"
-  build: "PASS"
-  mcp_handler_fix: "applied"
-  rtm_mcp_fix: "applied"
-  inspector_connect: "PASS"
-  rtm_authenticate: '{"authenticated":true,"userName":"David Koosis","userId":"430794"}'
-  rtm_getLists: '{"lists":[]}'
-  rtm_getTasks: "PASS->returns_real_tasks"
-  token_storage: "PASS->9ab201dd"
-  oauth_flow: "PASS->generates_codes"
-
-sessions:
-- ts: "2025-07-15T22:00:00Z"
-  fixes: [ "rtm_mcp_refactor", "auth_bypass", "oauth_route_fix", "inspector_integration" ]
-  time: 180
-- ts: "2025-07-15T21:15:00Z"
-  fixes: [ "architecture_refactor", "double_init_crash", "mcp_handler_bug", "missing_routes", "debug_dashboard_fix" ]
-  time: 120
-- ts: "2025-07-15T16:45:00Z"
-  fixes: [ "mcp_handler_auth", "McpServer_import", "tool_registration" ]
-  time: 45
-- ts: "2025-07-15T02:35:00Z"
-  fixes: [ "index_mcp_root_cause" ]
-  time: 95
-- ts: "2025-07-15T01:00:00Z"
-  fixes: [ "rtm_user_data", "logs" ]
-  time: 60
-- ts: "2025-07-14T17:00:00Z"
-  fixes: [ "blank_screen", "auth_html" ]
-  time: 30
-
-metrics:
-  orientation: [ 0, 120, 30, 5, 15, 20, 10, 5, 180 ]
-  redundant: [ 3, 0, 0, 0, 0, 0, 0, 2, 1 ]
-  hypothesis_success: [ 1, 1, 1, 1, 1, 1, 1, 1 ]
-  forward: true
