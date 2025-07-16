@@ -1,0 +1,22 @@
+Starting MCP inspector...
+⚙️ Proxy server listening on localhost:6277
+🔑 Session token: 1e22daa7836f797db35f180b118c226cf5001b7f93fdc08f72017a30ad73798d
+   Use this token to authenticate requests or set DANGEROUSLY_OMIT_AUTH=true to disable auth
+
+🚀 MCP Inspector is up and running at:
+   http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=1e22daa7836f797db35f180b118c226cf5001b7f93fdc08f72017a30ad73798d
+
+🌐 Opening browser...
+New StreamableHttp connection request
+Query parameters: {"url":"https://rtm-mcp-server.vcto-6e7.workers.dev/mcp","transportType":"streamable-http"}
+Created StreamableHttp server transport
+Created StreamableHttp client transport
+Client <-> Proxy  sessionId: d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received GET message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b
+Received POST message for sessionId d1a1d383-5fdd-4b8d-abb0-6b666b07400b

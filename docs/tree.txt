@@ -30,6 +30,7 @@
 │   └── tree.txt
 ├── endpoints.sh
 ├── inspector-config.json
+├── inspector.log
 ├── package.json
 ├── README.md
 ├── src
@@ -49,6 +50,7 @@
 │   │   └── utility-schemas.ts
 │   ├── types.ts
 │   └── utils.ts
+├── tail.log
 ├── test
 │   ├── env.d.ts
 │   └── index.spec.ts
@@ -58,4 +60,4 @@
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 53 files
+6 directories, 55 files

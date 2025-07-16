@@ -217,6 +217,109 @@ Deployment banner shows?
       * Correctly typed the Hono instance and fixed cookie handling logic.
 
 -----
+## Assess
+A. Architectural & Core Design Refinements (Highest Impact)
+These recommendations address the fundamental structure and interactions that are likely causing the most significant "itchy" feelings.
+
+Recommendation: Decouple UI/HTML from Application Logic.
+
+Problem: The debug dashboard HTML/CSS/JS is embedded as a large string in src/dashboard.ts, and error/auth pages are hardcoded HTML in src/rtm-handler.ts. This violates Separation of Concerns, makes UI changes difficult, and reduces readability.
+
+Actionable Steps:
+
+For Dashboard: Extract HTML, CSS, and JavaScript into separate files (dashboard.html, dashboard.css, dashboard.js) and serve them as static assets from the Cloudflare Worker. This could involve using wrangler.toml's [site] configuration or custom fetching.
+
+For Auth/Error Pages: Create dedicated HTML template files (e.g., auth-instructions.html, error-page.html). These can be read at worker startup or on demand, and placeholders can be dynamically replaced.
+
+Consider a Lightweight Templating Engine: For more complex dynamic HTML, explore Hono's JSX renderer or a small client-side templating library to compose UI programmatically but separately from direct string concatenation.
+
+Protocol Impact: Establishes a clear "UI Protocol" – application logic should not directly generate large blocks of UI; UI should be templated and managed separately.
+
+Recommendation: Enhance and Strictly Enforce Type Safety for Data Structures.
+
+Problem: Strategic use of any (e.g., DebugEvent['data'], RTMTransaction['request'/'response'], and RtmApi.makeRequest's generic T) undermines TypeScript's benefits, leading to runtime errors that could have been caught by the compiler.
+
+Actionable Steps:
+
+Specific DebugEvent.data Types: For each event type logged in DebugLogger (e.g., mcp_connection_attempt, oauth_authorize_start), define a specific interface for its data payload. Use discriminated unions if DebugEvent can have different data structures based on event type.
+
+JSON-RPC Message Interfaces: Create explicit interfaces for JSONRPCRequest (with method, params, id) and JSONRPCResponse (with result or error) within src/types.ts. Update RTMTransaction and rtm-mcp.ts to use these specific types.
+
+Refine RtmApi.makeRequest<T>: Ensure that T is always specified when makeRequest is called, reflecting the expected response structure for each RTM API method.
+
+Protocol Impact: Establishes a "Type Safety Protocol" – no any unless absolutely unavoidable and explicitly justified; all data structures should have explicit, narrow types.
+
+B. Developer Experience & Maintainability Enhancements (Moderate Impact)
+These improvements will directly make the codebase easier to work with and build confidence in its correctness.
+
+Recommendation: Implement Comprehensive Automated Testing.
+
+Problem: Current test coverage is minimal (test/index.spec.ts only has one test). This means changes are high-risk, refactoring is daunting, and there's no automated way to ensure existing functionality isn't broken. This is a major source of a "bad feel."
+
+Actionable Steps:
+
+Unit Tests: Focus on core business logic classes (RtmApi, DebugLogger, ProtocolLogger, RtmMCP's internal tool logic). Mock external dependencies (KV, external APIs).
+
+Integration Tests: Test the Hono routes (index.ts, rtm-handler.ts) using tools like @cloudflare/workers-runtime-stub or miniflare to simulate the Cloudflare environment.
+
+Isolate UI Logic for Testing: Once HTML/CSS/JS are separated, client-side JS can be tested with standard web testing tools.
+
+Protocol Impact: Establishes a "Testing Protocol" – critical paths and core logic must have automated tests; no new features without tests; tests should be easy to run.
+
+Recommendation: Standardize and Centralize Logging.
+
+Problem: console.log calls are mixed with DebugLogger calls, especially in RtmApi. This leads to inconsistent logging output and makes it hard to manage logging levels or direct logs to different destinations (e.g., production monitoring).
+
+Actionable Steps:
+
+Inject Logger: Modify constructors of classes like RtmApi to accept a DebugLogger instance. Replace all direct console.log/console.error calls with methods from this injected logger.
+
+Define Logging Levels: Implement methods in DebugLogger for debug, info, warn, error, allowing granular control.
+
+Configuration for Logging: Use environment variables to control logging levels in different environments.
+
+Protocol Impact: Establishes a "Logging Protocol" – all application logging must go through the centralized logger; console.log is for transient local debugging only.
+
+Recommendation: Refine Env Interface and Dependency Injection.
+
+Problem: The Env interface in src/types.ts acts as a "God Object" for dependencies. While convenient, it means modules have access to environment variables they don't need, potentially hiding true dependencies and making refactoring harder.
+
+Actionable Steps:
+
+Extract Smaller Env Interfaces: For each module, define a smaller interface that represents only the part of Env it needs (e.g., RtmApiEnv { RTM_API_KEY: string; RTM_SHARED_SECRET: string; }).
+
+Explicit Injection: In index.ts, when creating instances, pass only the required parts of the environment: new RtmApi(c.env.RTM_API_KEY, c.env.RTM_SHARED_SECRET); or new RtmApi({ apiKey: c.env.RTM_API_KEY, sharedSecret: c.env.RTM_SHARED_SECRET }); if using a smaller Env interface.
+
+Protocol Impact: Establishes a "Dependency Protocol" – modules should only depend on what they explicitly need, reducing hidden coupling and improving testability.
+
+C. Process & Collaboration Specifics (Long-term Confidence)
+These recommendations foster a culture of quality that addresses the underlying "feel" of a "mess."
+
+Recommendation: Adopt a "Definition of Done" that includes Testing & Documentation.
+
+Problem: Features might be considered "done" without sufficient testing or updated documentation, leading to accumulated technical debt and a "messy" feel.
+
+Actionable Steps:
+
+Formalize "Definition of Done" for new features/bug fixes. Example: "Automated tests for all new/modified logic," "JSDoc comments for all public APIs," "Updated ADRs or README for significant design changes."
+
+Integrate checks into your CI/CD pipeline (if applicable).
+
+Protocol Impact: Establishes a "Quality Protocol" – code is not considered complete unless it meets defined quality standards.
+
+Recommendation: Regular Code Review Focus on Architectural & Quality Adherence.
+
+Problem: Code reviews might focus only on functionality, missing deeper architectural or quality issues.
+
+Actionable Steps:
+
+Beyond functional review, dedicate part of the code review process to checking for adherence to the newly established "protocols" (UI, Type Safety, Testing, Logging, Dependency).
+
+Use tools like ESLint with custom rules to enforce some of these patterns automatically.
+
+Protocol Impact: Establishes a "Review Protocol" – ensures consistent application of quality standards across the team.
+
+By systematically addressing these points, you can shift from feeling "itchy" to gaining strong confidence in the architecture and the overall quality of your codebase. It's a journey, but tackling these areas will yield significant improvements in maintainability, stability, and developer satisfaction.
 
 ## 🤖 Agent State (2025-07-13 EOD)
 

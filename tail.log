@@ -1,0 +1,1845 @@
+{
+  "wallTime": 7,
+  "cpuTime": 0,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628854371,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/health",
+      "method": "GET",
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, br",
+        "accept-language": "en-US,en;q=0.9,fr;q=0.8",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae03cedcf3ed",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "cookie": "REDACTED",
+        "dnt": "1",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "priority": "u=0, i",
+        "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/3",
+        "tlsCipher": "AEAD-AES128-GCM-SHA256",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br, zstd",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "v0bBLHaHhxkjR4B6t450l2izvtMsCJpXpQ9fQJSfTcA=",
+        "tlsClientHelloLength": "1765",
+        "colo": "IAD",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "",
+        "tlsClientExtensionsSha1": "NYr89Zlyzti6tXXda7WFh/mevn8="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 4705,
+  "cpuTime": 16,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628854369,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/debug",
+      "method": "GET",
+      "headers": {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, br",
+        "accept-language": "en-US,en;q=0.9,fr;q=0.8",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae03bedaf3ed",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "cookie": "REDACTED",
+        "dnt": "1",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "priority": "u=0, i",
+        "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/3",
+        "tlsCipher": "AEAD-AES128-GCM-SHA256",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br, zstd",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "v0bBLHaHhxkjR4B6t450l2izvtMsCJpXpQ9fQJSfTcA=",
+        "tlsClientHelloLength": "1765",
+        "colo": "IAD",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "",
+        "tlsClientExtensionsSha1": "NYr89Zlyzti6tXXda7WFh/mevn8="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 130,
+  "cpuTime": 13,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] Constructor called"
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    },
+    {
+      "message": [
+        "[RtmMCP] Registering tools"
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    },
+    {
+      "message": [
+        "[RtmMCP] Tools registered successfully"
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    },
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "initialize"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {
+              "tools": {
+                "listChanged": true
+              }
+            },
+            "serverInfo": {
+              "name": "rtm",
+              "version": "1.0.0"
+            }
+          },
+          "jsonrpc": "2.0",
+          "id": 0
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628865319
+    }
+  ],
+  "eventTimestamp": 1752628865204,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae4379366d1f",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "205",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 946,
+  "cpuTime": 9,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628864573,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae4379366d1f",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "205",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 29,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "J8C7EeI/PEeBLHlB7LqucIsycj24eaHIhciSSyNJ4Cc=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "ac589e0befae7d34cfef3b107de5084f14902b61225a7e345e640ddd65ebf39750a3ef01fff4fe865f32824b9ec81290",
+          "clientHandshake": "ce1ea3192c8f92059d0faa420cb6ecedb1b33a5955cec905c16e6adb8ed5e99b8ebcccd3aa166c78f3822f7349f9dd85",
+          "serverHandshake": "c791508c4f3c79bd76d73544360d413cd808e0eed7bbb337c47eb1d4fda54b02fa8362259b8e2f7827fe1f74025f2f3c",
+          "serverFinished": "b1f6b997ae087a2f506528c0ea21cf593f40e322f45fec26286aab97f37d8b7aaa0e7e3695dc5a6ad782bc1d349ecafd"
+        },
+        "tlsClientHelloLength": "1618",
+        "colo": "MIA",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "u4wtEMFQBY18l3BzHAvORm+KGRw=",
+        "tlsClientExtensionsSha1": "1eY97BUYYO8vDaTfHQywB1pcNdM="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 3,
+  "cpuTime": 3,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628871725
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/list"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628871725
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "tools": [
+              {
+                "name": "rtm_authenticate",
+                "description": "Check authentication status",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_check_auth_status",
+                "description": "Check current authentication status",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_getLists",
+                "description": "Get all RTM lists",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_getTasks",
+                "description": "Get tasks from RTM",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "annotations": {
+                  "list_id": {
+                    "type": "string",
+                    "description": "List ID (optional)"
+                  },
+                  "filter": {
+                    "type": "string",
+                    "description": "RTM filter string (optional)"
+                  }
+                }
+              },
+              {
+                "name": "rtm_addTask",
+                "description": "Add a new task",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "annotations": {
+                  "name": {
+                    "type": "string",
+                    "description": "Task name"
+                  },
+                  "list_id": {
+                    "type": "string",
+                    "description": "List ID (optional)"
+                  },
+                  "parse": {
+                    "type": "boolean",
+                    "description": "Parse for Smart Add syntax"
+                  }
+                }
+              },
+              {
+                "name": "rtm_deleteTask",
+                "description": "Delete a task",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_completeTask",
+                "description": "Mark a task as complete",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_uncompleteTask",
+                "description": "Mark a task as incomplete",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_setTaskName",
+                "description": "Update task name",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_setTaskPriority",
+                "description": "Update task priority",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_setTaskDueDate",
+                "description": "Update task due date",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              },
+              {
+                "name": "rtm_getSettings",
+                "description": "Get RTM settings",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": 1
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628871725
+    }
+  ],
+  "eventTimestamp": 1752628871725,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae6c2adf42f0",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "85",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 761,
+  "cpuTime": 8,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628871090,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae6c2adf42f0",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "85",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 24,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "6AxyI0Z5HDNQ30hnH239c2vm6Y5Q7HCOL11qxN6DYiM=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "83dd0338b050e0507a33854d734ba955a0812e032cccd0463b2f9d0cffa29dcf3b49375bf7c4af6c29070bcea31f7ff4",
+          "clientHandshake": "b8f7a359776478ffe6d33e9cf1ac7c95ac2a1e2fe2f5e33f2518f7f3eaac9072b0a4d783f20029d51125639257eaa70c",
+          "serverHandshake": "9f62abb12df185dd10fa61556b307c9b93b376795f398c8154dba98e181ccdfee2be4581fcf657e38a8713cabf15049e",
+          "serverFinished": "bbddc993f04e3a93c85cd048b4b3f5a265a6e61099db7d69fa4ccbc1520a9a65248caab8aa8e0a2c253dfbb244a3db73"
+        },
+        "tlsClientHelloLength": "1889",
+        "colo": "MIA",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "PHN9SOFIC3IOu3LzddUG4fgXQhc=",
+        "tlsClientExtensionsSha1": "F6bXfye79OtPFsjnipufoBERSq4="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 2,
+  "cpuTime": 2,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628878912
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/call"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628878912
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"authenticated\": true,\n  \"userName\": \"David Koosis\",\n  \"userId\": \"430794\"\n}"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": 2
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628878912
+    }
+  ],
+  "eventTimestamp": 1752628878912,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae993ec8c609",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "126",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 788,
+  "cpuTime": 7,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628878292,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdae993ec8c609",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "126",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 25,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "dk8kR8fu2XiQsgdTB68jBQvb2T4lpHJXp5H46DJQHW8=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "4e03e0c6812c76ad032bcf1eda9aee4c81803ee9a81e3b9c264ed23fcaef389827b8f93edf3e29ec76dd02f2f4fccc68",
+          "clientHandshake": "3e0d715eede3ef1b2eab89d9c9e04bd603b1cd3b9f89509aa6a665be27e1916132607d3807bf5da4ca8c4d581c9bab68",
+          "serverHandshake": "ca706a0314c6b363ba954543d9670be1977738f7a7c4f76548967686e01c1d0bc2547b6fdf4ce2fec171c884e2304066",
+          "serverFinished": "ef06f04dcf9782b447a37e4438f3af9f72f69474881cfc1a418c2ee19aef1e6d20861fe5d740bb90c4cf60ab64c2237a"
+        },
+        "tlsClientHelloLength": "1889",
+        "colo": "IAD",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "PHN9SOFIC3IOu3LzddUG4fgXQhc=",
+        "tlsClientExtensionsSha1": "F6bXfye79OtPFsjnipufoBERSq4="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 1,
+  "cpuTime": 1,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628891042
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/call"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628891042
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"authenticated\": true,\n  \"userName\": \"David Koosis\",\n  \"userId\": \"430794\",\n  \"hasToken\": true\n}"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": 3
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628891042
+    }
+  ],
+  "eventTimestamp": 1752628891042,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaee4f836204d",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "131",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 796,
+  "cpuTime": 9,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628890424,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaee4f836204d",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "131",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 23,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "KePI7WIYp9G511r3qww+uUrOg9DTigklms7YsZOtQ1I=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "0cd7dd9ebfca689463fcc7f264f2b0d6a3cb13ad0cdfd4c29509ccc36bb7095cc52829edd2ccf1079cb3e0a5cfa5b75a",
+          "clientHandshake": "a1c7cb07f6fd81b368025f8c64aac140969e874b27edc995c8c132e759ff15562758a5fa87d86f5673e54cee1d4ea97d",
+          "serverHandshake": "72a01d852ff5b3e2980e0fc4854dd6624336441a534055dbf32116a8bd7f80b756b2d47905c5310403e72e8a479bbbbb",
+          "serverFinished": "adc3ff3c63adac2d46e9449d48ae301c5a121b15ca3cf91ccbcbc80a661fd3bf1255f4116af13bfb4aa298ac8e929071"
+        },
+        "tlsClientHelloLength": "1889",
+        "colo": "MIA",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "PHN9SOFIC3IOu3LzddUG4fgXQhc=",
+        "tlsClientExtensionsSha1": "F6bXfye79OtPFsjnipufoBERSq4="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 1119,
+  "cpuTime": 58,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/call"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] Constructor called",
+        {
+          "hasApiKey": true,
+          "hasSharedSecret": true,
+          "apiKeyLength": 32,
+          "sharedSecretLength": 16
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] makeRequest called:",
+        {
+          "method": "rtm.tasks.getList",
+          "params": {
+            "auth_token": "[REDACTED]"
+          }
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] generateSignature called with params:",
+        [
+          "auth_token",
+          "api_key",
+          "method",
+          "format"
+        ]
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] Signature params:",
+        {
+          "sortedKeys": [
+            "api_key",
+            "auth_token",
+            "format",
+            "method"
+          ],
+          "paramStringLength": 122,
+          "messageLength": 138,
+          "firstParam": "api_key=ede6f62b622b491b0b7905e5fb3ca944"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] Generated signature:",
+        "27b7a598b4659dbf07c7ba78e9ebaa48"
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] Making request to:",
+        {
+          "url": "/services/rest/",
+          "method": "rtm.tasks.getList",
+          "paramCount": 5,
+          "hasApiKey": true,
+          "hasSignature": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628897263
+    },
+    {
+      "message": [
+        "[RtmApi] Raw response:",
+        {
+          "status": 200,
+          "statusText": "OK",
+          "contentType": "text/javascript; charset=utf-8",
+          "contentLength": 2582809,
+          "preview": "{\"rsp\":{\"stat\":\"ok\",\"tasks\":{\"rev\":\"t9njf7iyyj1sayxpd7pgkcwjersio5\",\"list\":[{\"id\":\"2076497\",\"taskseries\":[{\"id\":\"19143249\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-08T01:05:01Z\",\"name\":\"Fw"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628898322
+    },
+    {
+      "message": [
+        "[RtmApi] Parsed response:",
+        {
+          "stat": "ok",
+          "hasData": true,
+          "dataKeys": [
+            "tasks"
+          ],
+          "fullResponse": "{\"stat\":\"ok\",\"tasks\":{\"rev\":\"t9njf7iyyj1sayxpd7pgkcwjersio5\",\"list\":[{\"id\":\"2076497\",\"taskseries\":[{\"id\":\"19143249\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-08T01:05:01Z\",\"name\":\"Fw: Updated: Lunch with Marc Donner\",\"source\":\"email\",\"url\":\"\",\"location_id\":\"\",\"tags\":[],\"participants\":[],\"notes\":{\"note\":[{\"id\":\"2413349\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-05T23:19:26Z\",\"title\":\"David Koosis | CIO\",\"$t\":\"NYC Department of Correction\\r\\n(212) 266-1895\\r\\n________________"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628898322
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"lists\": []\n}"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": 4
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628898322
+    }
+  ],
+  "eventTimestamp": 1752628897263,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaf0c08bb2d85",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "122",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 1874,
+  "cpuTime": 8,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628896662,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaf0c08bb2d85",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "122",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 25,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "X49cIit0yFPGhb3NFwh7BEJsclHmE/P4U+i8H+ZWA50=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "1bfe356ce7c2ca9f372cf02577400a2d63fcb0666e758888831b176fe32c4a2f8083dcbacd345bc32e0f426b3df8e9b4",
+          "clientHandshake": "aee6b34207a4e471b0bd9ffd9b009c0cf2b1b3907a93f697b724c0d665f3bad9d9eb89854a5dae36c09da91b6bad919e",
+          "serverHandshake": "7012a31757f547ac5811dec7528ffbbc70c06a0a2604e10b3c2c09ec55000aad5083358f20c945cd9516554f404e3710",
+          "serverFinished": "2447a18603459dec66b16657c789a601e740754c5445f795af891ba28201d00f22efcf6a1ee7801741401aa2e5e43291"
+        },
+        "tlsClientHelloLength": "1889",
+        "colo": "IAD",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "PHN9SOFIC3IOu3LzddUG4fgXQhc=",
+        "tlsClientExtensionsSha1": "F6bXfye79OtPFsjnipufoBERSq4="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 805,
+  "cpuTime": 300,
+  "truncated": true,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/call"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] Constructor called",
+        {
+          "hasApiKey": true,
+          "hasSharedSecret": true,
+          "apiKeyLength": 32,
+          "sharedSecretLength": 16
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] makeRequest called:",
+        {
+          "method": "rtm.tasks.getList",
+          "params": {
+            "auth_token": "[REDACTED]"
+          }
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] generateSignature called with params:",
+        [
+          "auth_token",
+          "api_key",
+          "method",
+          "format"
+        ]
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] Signature params:",
+        {
+          "sortedKeys": [
+            "api_key",
+            "auth_token",
+            "format",
+            "method"
+          ],
+          "paramStringLength": 122,
+          "messageLength": 138,
+          "firstParam": "api_key=ede6f62b622b491b0b7905e5fb3ca944"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] Generated signature:",
+        "27b7a598b4659dbf07c7ba78e9ebaa48"
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] Making request to:",
+        {
+          "url": "/services/rest/",
+          "method": "rtm.tasks.getList",
+          "paramCount": 5,
+          "hasApiKey": true,
+          "hasSignature": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906313
+    },
+    {
+      "message": [
+        "[RtmApi] Raw response:",
+        {
+          "status": 200,
+          "statusText": "OK",
+          "contentType": "text/javascript; charset=utf-8",
+          "contentLength": 2582809,
+          "preview": "{\"rsp\":{\"stat\":\"ok\",\"tasks\":{\"rev\":\"t9njf7iyyj1sayxpd7pgkcwjersio5\",\"list\":[{\"id\":\"2076497\",\"taskseries\":[{\"id\":\"19143249\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-08T01:05:01Z\",\"name\":\"Fw"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906594
+    },
+    {
+      "message": [
+        "[RtmApi] Parsed response:",
+        {
+          "stat": "ok",
+          "hasData": true,
+          "dataKeys": [
+            "tasks"
+          ],
+          "fullResponse": "{\"stat\":\"ok\",\"tasks\":{\"rev\":\"t9njf7iyyj1sayxpd7pgkcwjersio5\",\"list\":[{\"id\":\"2076497\",\"taskseries\":[{\"id\":\"19143249\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-08T01:05:01Z\",\"name\":\"Fw: Updated: Lunch with Marc Donner\",\"source\":\"email\",\"url\":\"\",\"location_id\":\"\",\"tags\":[],\"participants\":[],\"notes\":{\"note\":[{\"id\":\"2413349\",\"created\":\"2008-08-05T23:19:26Z\",\"modified\":\"2008-08-05T23:19:26Z\",\"title\":\"David Koosis | CIO\",\"$t\":\"NYC Department of Correction\\r\\n(212) 266-1895\\r\\n________________"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628906594
+    },
+    {
+      "message": [
+        "Log size limit exceeded: More than 256KB of data (across console.log statements, exception, request metadata and headers) was logged during a single request. Subsequent data for this request will not be recorded in logs, appear when tailing this Worker's logs, or in Tail Workers."
+      ],
+      "level": "warn",
+      "timestamp": 1752628906594
+    }
+  ],
+  "eventTimestamp": 1752628906313,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaf4489765bd2",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "122",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 1373,
+  "cpuTime": 8,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628905711,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdaf4489765bd2",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "122",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 31,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "IK+GzscB/83rrw6qwb7ydYMN3ITCfCKEDOj2wMiRYHY=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "5606fb75bb2d783fa6fd1fcfdcb7da865aa7bc7fe6d28e33d9503072fbfd704e0c77a34e3352c4ff1ea15bbe4a22d946",
+          "clientHandshake": "41b77f6e1fef4d145bff1ddd8f7f1b54fb829cd1fc962e9290448f7b1fa7de24312b6bb1bed08925de28869f6cf2ee5b",
+          "serverHandshake": "0e261e1cb08b3ec0379d2d309ff20196c1835a4bbfa09fcfe93134aeb1fdf12a616bdcd2882896367ec0c65bd36ea299",
+          "serverFinished": "56d442bbd90b72e80aa563865440e45cba265da13b482c90b97772dd3351e4274a7b36c281452e67f973d2d6c19b881b"
+        },
+        "tlsClientHelloLength": "1889",
+        "colo": "MIA",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "PHN9SOFIC3IOu3LzddUG4fgXQhc=",
+        "tlsClientExtensionsSha1": "F6bXfye79OtPFsjnipufoBERSq4="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 2,
+  "cpuTime": 1,
+  "truncated": false,
+  "executionModel": "durableObject",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "entrypoint": "RtmMCP",
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [
+    {
+      "message": [
+        "[RtmMCP] fetch called",
+        {
+          "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+          "method": "POST",
+          "hasToken": true
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628930607
+    },
+    {
+      "message": [
+        "[RtmMCP] Request:",
+        {
+          "method": "tools/call"
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628930607
+    },
+    {
+      "message": [
+        "[RtmMCP] Response:",
+        {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Get RTM settings not yet implemented"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": 6
+        }
+      ],
+      "level": "log",
+      "timestamp": 1752628930607
+    }
+  ],
+  "eventTimestamp": 1752628930607,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdafdbfd267b6f",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "125",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "x-rtm-token": "REDACTED",
+        "x-rtm-userid": "430794",
+        "x-rtm-username": "David Koosis"
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
+{
+  "wallTime": 832,
+  "cpuTime": 9,
+  "truncated": false,
+  "executionModel": "stateless",
+  "outcome": "ok",
+  "scriptVersion": {
+    "id": "ec77be63-99b0-44e4-b032-ff2748e26c3b"
+  },
+  "scriptName": "rtm-mcp-server",
+  "diagnosticsChannelEvents": [],
+  "exceptions": [],
+  "logs": [],
+  "eventTimestamp": 1752628929935,
+  "event": {
+    "request": {
+      "url": "https://rtm-mcp-server.vcto-6e7.workers.dev/mcp",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json, text/event-stream",
+        "accept-encoding": "gzip, br",
+        "accept-language": "*",
+        "authorization": "REDACTED",
+        "cf-connecting-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e",
+        "cf-ipcountry": "US",
+        "cf-ray": "95fdafdbfd267b6f",
+        "cf-visitor": "{\"scheme\":\"https\"}",
+        "connection": "Keep-Alive",
+        "content-length": "125",
+        "content-type": "application/json",
+        "host": "rtm-mcp-server.vcto-6e7.workers.dev",
+        "sec-fetch-mode": "cors",
+        "user-agent": "node",
+        "x-forwarded-proto": "https",
+        "x-real-ip": "2600:1700:25e0:5a80:746d:e3af:3ca8:419e"
+      },
+      "cf": {
+        "clientTcpRtt": 25,
+        "requestHeaderNames": {},
+        "httpProtocol": "HTTP/1.1",
+        "tlsCipher": "AEAD-AES256-GCM-SHA384",
+        "continent": "NA",
+        "asn": 7018,
+        "clientAcceptEncoding": "gzip, deflate, br",
+        "verifiedBotCategory": "",
+        "country": "US",
+        "isEUCountry": false,
+        "region": "North Carolina",
+        "tlsClientCiphersSha1": "kXrN3VEKDdzz2cPKTQaKzpxVTxQ=",
+        "tlsClientAuth": {
+          "certIssuerDNLegacy": "",
+          "certIssuerSKI": "",
+          "certSubjectDNRFC2253": "",
+          "certSubjectDNLegacy": "",
+          "certFingerprintSHA256": "",
+          "certNotBefore": "",
+          "certSKI": "",
+          "certSerial": "",
+          "certIssuerDN": "",
+          "certVerified": "NONE",
+          "certNotAfter": "",
+          "certSubjectDN": "",
+          "certPresented": "0",
+          "certRevoked": "0",
+          "certIssuerSerial": "",
+          "certIssuerDNRFC2253": "",
+          "certFingerprintSHA1": ""
+        },
+        "tlsClientRandom": "en4X/z0DSFHB95p/+7p6Lekhu8m5iH67MzEwoDubLPs=",
+        "tlsExportedAuthenticator": {
+          "clientFinished": "34152267930566059e8974546a08156f9bfe53d387a9d1053ae73fc6d0f504de14b458ce494ccd287609d12a5e1b4353",
+          "clientHandshake": "947dd8dc07be1063fc51a7ee9bc8307203177f104802ad9db22587d4871898ca4ac34646a456777dbe499f830f069804",
+          "serverHandshake": "dc1fc2975d6ad95f21d237bd0eeeee491a360eb86a1ae189346556d4d018e0714261602a87cd3be83818ef97a243afeb",
+          "serverFinished": "3cb0b874a91215d9e74ce0911fc4dcfc7601fe56eaefefb44f5d5c79be8c4b8cdc66b920f2d6aa35b714e8aa4b90ab65"
+        },
+        "tlsClientHelloLength": "1618",
+        "colo": "MIA",
+        "timezone": "America/New_York",
+        "longitude": "-80.85770",
+        "latitude": "35.13160",
+        "edgeRequestKeepAliveStatus": 1,
+        "requestPriority": "",
+        "postalCode": "28210",
+        "city": "Charlotte",
+        "tlsVersion": "TLSv1.3",
+        "regionCode": "NC",
+        "asOrganization": "AT&T Enterprises, LLC",
+        "tlsClientExtensionsSha1Le": "u4wtEMFQBY18l3BzHAvORm+KGRw=",
+        "tlsClientExtensionsSha1": "1eY97BUYYO8vDaTfHQywB1pcNdM="
+      }
+    },
+    "response": {
+      "status": 200
+    }
+  }
+}
