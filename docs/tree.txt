@@ -1,9 +1,5 @@
 .
-├── add.sh
-├── claude_cleaned.json
-├── dlogs.sh
-├── docs
-│   ├── _index.md
+├── archive
 │   ├── adr-architecture-core.md
 │   ├── adr-architecture-rtm-mcp.md
 │   ├── adr-architecture-transport-hybrid.md
@@ -13,31 +9,14 @@
 │   ├── adr-platform-dependencies.md
 │   ├── adr-platform-typescript.md
 │   ├── adr-practices-telemetry.md
-│   ├── cf_ag.ts
-│   ├── DEBUG-STATE-RECIPE.yaml
-│   ├── DEBUG-STATE.yaml
-│   ├── reference
-│   │   ├── cf_client-connection.txt
-│   │   ├── cf_client.txt
-│   │   ├── cf_do-oauth-client-provider.txt
-│   │   ├── cf_index.txt
-│   │   ├── cf_mcp-index.txt
-│   │   ├── llms-full.txt
-│   │   ├── schema.ts
-│   │   └── ts-sdk.md
-│   ├── rtm-mcp-debug-logs.json
-│   ├── TODO.md
-│   └── tree.txt
-├── endpoints.sh
-├── inspector-config.json
-├── inspector.log
-├── package.json
-├── README.md
-├── src
+│   ├── cf_client-connection.txt
+│   ├── cf_client.txt
+│   ├── cf_do-oauth-client-provider.txt
+│   ├── cf_index.txt
+│   ├── cf_mcp-index.txt
 │   ├── dashboard.ts
 │   ├── debug-logger.ts
-│   ├── index.ts
-│   ├── index.ts.bak
+│   ├── llms-full.txt
 │   ├── protocol-logger.ts
 │   ├── rtm-api.ts
 │   ├── rtm-handler.ts
@@ -48,16 +27,34 @@
 │   │   ├── list-schemas.ts
 │   │   ├── task-schemas.ts
 │   │   └── utility-schemas.ts
+│   ├── ts-sdk.md
 │   ├── types.ts
 │   └── utils.ts
-├── tail.log
+├── docs
+│   ├── DEBUG-STATE-RECIPE.yaml
+│   ├── DEBUG-STATE.yaml
+│   ├── reference
+│   │   └── schema.ts
+│   ├── TODO.md
+│   └── tree.txt
+├── GETTING-STARTED.md
+├── inspector-config.json
+├── package-lock.json
+├── package.json
+├── README.md
+├── setup.sh
+├── src
+│   ├── auth
+│   │   └── mock-handler.ts
+│   ├── debug-logger.ts
+│   ├── index.ts
+│   └── mcp.ts
 ├── test
-│   ├── env.d.ts
-│   └── index.spec.ts
+│   └── setup.test.ts
 ├── test-mcp.sh
 ├── tsconfig.json
 ├── vitest.config.mts
 ├── worker-configuration.d.ts
 └── wrangler.toml
 
-6 directories, 55 files
+8 directories, 50 files

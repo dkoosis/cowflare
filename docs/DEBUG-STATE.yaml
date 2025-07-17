@@ -1,136 +1,54 @@
-# MCP-DEBUG-STATE-V1
-# REMEMBER: PRESERVE VALUABLE EXPERIMENT RESULTS
-meta:
-  goal: "claude.ai->rtm_tasks"
-  endpoint: "rtm-mcp-server.vcto-6e7.workers.dev"
-  deployment: "clear-Holstein"
-  last_update: "2025-07-15T23:30:00Z"
+# DEBUG-STATE.yaml - Machine-optimized session context
+# Updated: Session Start
 
-state:
-  build: "PASS"
-  inspector_connect: "PASS"
-  tool_execution: "PASS"
-  auth_flow: "PASS"
-  oauth_integration: "PASS"
-  rtm_user_fetch: "PASS"
-  rtm_api_integration: "PASS"
-  claude_integration: "PENDING_TEST"
-  mcp_connection: "PASS"
-  logging: "PASS"
-  rtm_mcp_protocol: "PASS"
-  index_mcp_handler: "PASS"
-  auth_bypass_removed: "DONE"
+## Current State
+status: "project_initialization"
+phase: "setup_from_remote_mcp_template"
+approach: "mock_oauth_with_rtm_ready"
 
-proven:
-- "rtm_auth!=oauth2_standard"
-- "rtm_auth==desktop_flow"
-- "tool_return=={content:[{type:'text',text:...}]}"
-- "transport==streamable_http"
-- "mcp_handler==RtmMCP.serve('/mcp',{...})"
-- "corsOptions.origin==string"
-- "hono_app==Hono<{Bindings:Env;Variables:Variables}>()"
-- "oauth_flow==/authorize->frob->token->code->redirect"
-- "deployment_name==Math.floor((Date.now()/1000)%adjectives.length)"
-- "oauth_manual_test==success"
-- "oauth_code_generation==working"
-- "dashboard_import==dashboard.ts"
-- "authorize_error_returns_html==fixed"
-- "rtm_getToken_returns=={token,auth}"
-- "real_user_data==fetched_from_rtm"
-- "claude_redirect_uri==https://claude.ai/api/mcp/auth_callback"
-- "rtm_mcp.sessionInitialized==true"
-- "rtm_mcp.fetch->!sessionInitialized->bypass_auth"
-- "index.ts:/mcp->ALL_require_bearer"
-- "agents/mcp==local_library"
-- "this.server.tool()!=registerTool()"
-- "mcp_initialize!=require_auth"
-- "McpServer==@modelcontextprotocol/sdk/server/mcp.js"
-- "server.tool()==4_params(name,desc,schema,handler)"
-- "schema_names!=rtm_prefix"
-- "inline_schemas>missing_imports"
-- "rtm_api.getTasks()==implemented"
-- "rtm_api.addTask()==implemented"
-- "McpAgent.mount()->double_init_crash"
-- "RtmMCP.extends(DurableObject)->stable"
-- "InMemoryTransport->bridges_http_to_mcp_sdk"
-- "auth_bypass->enables_inspector_testing"
-- "X-RTM-Token_headers->pass_auth_to_DO"
-- "rtm_getTasks()->returns_real_data"
-- "inspector->connects_with_bearer"
-- "auth_bypass->REMOVED_2025-07-15T23:30:00Z"
-- "mcp_initialize->requires_bearer_token"
+## Architecture Decisions
+transport:
+  - SSE support for backward compatibility
+  - Streamable HTTP for future-proofing
+  - Single Worker handling both transports
+auth:
+  - Mock OAuth provider initially
+  - Structure ready for Cloudflare RTM integration
+  - Token-based session management
 
-failed:
-- "serveStreamableHttp->2339"
-- "origin:string[]->2322"
-- "c.get('debugLogger')->2769"
-- "getUserInfo->2339"
-- "dashboard.txt->2307"
-- "claude_ai_integration->shows_connect_after_oauth"
-- "mcp_connection->no_requests_after_oauth"
-- "index_mcp_handler->blocks_initialize->-32000"
-- "McpServer_import->agents/mcp"
-- "rtmGetTasksSchema->GetTasksSchema"
-- "server.setRequestHandler->server.tool"
-- "mcp_server_error->500->McpAgent_crash"
-- "DurableObject_not_defined->missing_global"
-- "McpServer.fetch()->method_not_exist"
-- "/complete-auth->404->missing_/auth_prefix"
-- "503_deployment_api->temporary_cf_issue"
+## Implementation Plan
+1. Base structure from remote-mcp-server template
+2. Mock OAuth handler (replace GitHub handler)
+3. RTM integration points identified
+4. Test harness for local development
 
-hypotheses:
-  h1:
-    desc: "claude_should_connect->with_correct_oauth"
-    test: "add_mcp_server_in_claude"
-    priority: 1
-  h2:
-    desc: "mcp_full_flow->should_work_production"
-    test: "deploy_and_test_claude"
-    priority: 2
-  h3:
-    desc: "tools_should_execute->after_auth"
-    test: "rtm_getTasks_in_claude"
-    priority: 3
+## Known Issues
+- None yet (fresh start)
 
-next_action: "deploy->test_claude_integration"
+## Session Goals
+- [x] Initialize project structure
+- [x] Create mock OAuth handler
+- [x] Set up local development environment
+- [x] Identify RTM integration points
+- [x] Create basic MCP tool for testing
 
-code_refs:
-  serve: "src/index.ts:L34"
-  cors: "src/index.ts:L36"
-  mcp_handler: "src/index.ts:L84-147"
-  rtm_fetch: "src/rtm-mcp.ts:L36-76"
-  rtm_init: "src/rtm-mcp.ts:L81-84"
-  rtm_tools: "src/rtm-mcp.ts:L93-145"
-  imports: "src/rtm-mcp.ts:L2-3"
-  tool_reg: "src/rtm-mcp.ts:L69-180"
-  inline_schemas: "src/rtm-mcp.ts:L86-91"
-  auth_bypass_removed: "src/index.ts:L107-135"
-  rtm_mcp_fetch: "src/rtm-mcp.ts:L30-96"
-  in_memory_transport: "src/rtm-mcp.ts:L49-90"
-  oauth_fix: "src/rtm-handler.ts:L140"
-  debug_tokens: "src/index.ts:L154"
+## Session Results
+- Created complete project structure from remote-mcp-server template
+- Implemented MockAuthHandler with visual OAuth flow
+- Set up dual transport support (SSE + Streamable HTTP)
+- Added three test tools: add, whoami, increment
+- Configured for easy RTM integration (handler swap)
 
-errors_fixed:
-  e1: "tool_response->wrap:{content:[...]}"
-  e2: "serveStreamableHttp->serve"
-  e3: "origin:[]->origin:string"
-  e4: "unknown_logger->type:Variables"
-  e5: "getUserInfo->mock_data"
-  e6: "dashboard.txt->dashboard.ts"
-  e7: "DebugEvent->import_type"
-  e8: "authorize_json_error->html_error_page"
-  e9: "getToken_string->getToken_object"
-  e10: "rtm_mcp->sessionInitialized"
-  e11: "index_mcp->check_body.method"
-  e12: "initialize_auth_check->read_body_first"
-  e13: "McpServer_import->sdk/server/mcp.js"
-  e14: "missing_schemas->inline_definitions"
-  e15: "setRequestHandler->server.tool"
-  e16: "double_init_crash->removed McpAgent.mount()"
-  e17: "mcp_handler_bug->refactored /mcp handler"
-  e18: "missing_dashboard->restored /debug route"
-  e19: "missing_healthcheck->added /health route"
-  e20: "createDebugDashboard_signature->fixed factory"
-  e21: "McpAgent_extends->removed_inheritance"
-  e22: "DurableObject_global->direct_class"
-  e23: "McpServer.fetch->InMemoryTransport"
+## Discovery
+- Found existing workers in Cloudflare account:
+  - rtm-mcp-server (modified 2025-07-16)
+  - rtm-auth-page (modified 2025-06-20)
+- These may contain RTM integration code to reference
+
+## Technical Context
+mcp_sdk: "@modelcontextprotocol/typescript-sdk"
+agents_sdk: "agents/mcp"
+transport_methods:
+  - "SSE (/sse endpoint)"
+  - "Streamable HTTP (/mcp endpoint)"
+oauth_library: "@cloudflare/workers-oauth-provider"

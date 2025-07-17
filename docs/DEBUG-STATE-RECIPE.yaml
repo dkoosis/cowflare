@@ -1,97 +1,52 @@
-# DEBUG-STATE-RECIPE-V1
-# Recipe for creating machine-optimized inter-session state
+# DEBUG-STATE-RECIPE.yaml - Template for updating DEBUG-STATE.yaml
 
-format_principles:
-  brevity: "keys>prose"
-  precision: "line_numbers>descriptions"
-  actionable: "next_command>next_concept"
-  measurable: "error_codes>error_descriptions"
-  traceable: "exact_values>summaries"
+## Purpose
+This file provides a template for maintaining DEBUG-STATE.yaml consistency across sessions.
 
-required_sections:
-  meta:
-  - goal: "ultimate_objective"
-  - endpoint: "live_url"
-  - deployment: "current_version_id"
-  - last_update: "ISO_timestamp"
+## Update Triggers
+- Session start: Review current state
+- Major decisions: Document approach changes
+- Issue resolution: Update known issues
+- Session end: Record results
 
-  state:
-    desc: "binary_status_each_component"
-    values: [ "PASS", "FAIL", "UNTESTED", "PARTIAL" ]
+## Standard Sections
 
-  proven:
-    desc: "verified_facts_as_assertions"
-    format: "fact==value OR fact!=value"
-    examples:
-    - "method==serve() NOT serveStreamableHttp()"
-    - "type==string NOT string[]"
+### Current State
+status: # One of: project_initialization, development, testing, debugging, deployment
+phase: # Specific phase within status
+approach: # Current technical approach
 
-  failed:
-    desc: "what_broke->error_code"
-    format: "attempt->error_number"
+### Architecture Decisions
+# Key technical choices and rationale
+transport: # Transport method decisions
+auth: # Authentication approach
+state: # State management strategy
 
-  hypotheses:
-    desc: "testable_next_steps"
-    format:
-      id:
-        desc: "condition->expected_outcome"
-        test: "exact_command_or_action"
-        priority: 1-N
+### Implementation Plan
+# Numbered steps for current work
 
-  next_action:
-    desc: "immediate_next_command"
-    format: "tool:specific_action"
+### Known Issues
+# Active problems and blockers
+- issue: description
+  status: investigating|blocked|resolved
+  workaround: if any
 
-  code_refs:
-    desc: "exact_locations"
-    format: "name: file:line_number"
+### Session Goals
+# Checkbox list of session objectives
+- [ ] Goal description
 
-  errors_fixed:
-    desc: "problem->solution"
-    format: "symptom->fix_applied"
+### Session Results
+# Summary of what was accomplished
 
-  test_results:
-    desc: "actual_values_from_tests"
-    include: [ "urls", "tokens", "ids", "responses" ]
+### Technical Context
+# Key dependencies and versions
+mcp_sdk: version
+agents_sdk: version
+# Other relevant technical details
 
-  sessions:
-    desc: "work_chunks"
-    format:
-    - ts: "ISO_timestamp"
-      fixes: [ "what_got_fixed" ]
-      time: "minutes_spent"
-
-  metrics:
-    desc: "performance_tracking"
-    format:
-      orientation: [ seconds_per_session ]
-      redundant: [ count_per_session ]
-      hypothesis_success: [ success_count ]
-      forward: boolean
-
-optimization_rules:
-  1: "Remove all explanatory text"
-  2: "Use actual values not descriptions"
-  3: "Include error codes not messages"
-  4: "List files:lines not 'in file X'"
-  5: "Commands not concepts for next_action"
-  6: "Arrays for time series data"
-  7: "Exact test inputs/outputs"
-  8: "ISO timestamps everywhere"
-  9: "Abbreviate without losing precision"
-  10: "Structure for grep/parse ability"
-
-anti_patterns:
-- "verbose_descriptions"
-- "missing_line_numbers"
-- "vague_next_steps"
-- "prose_in_values"
-- "missing_error_codes"
-- "approximate_values"
-
-usage:
-  1: "At session end, update with findings"
-  2: "At session start, parse for context"
-  3: "During debug, add discoveries"
-  4: "On success, move hypothesis->proven"
-  5: "On failure, add to failed with code"
+## Best Practices
+1. Keep entries concise and technical
+2. Focus on decisions, not discussions
+3. Update at session boundaries
+4. Include version numbers for dependencies
+5. Mark items as resolved, don't delete history

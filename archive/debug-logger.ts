@@ -3,7 +3,7 @@
  * Debug Logger for RTM OAuth Flow and MCP Connection
  * Persists debug information to KV for systematic troubleshooting
  */
-import { default as dashboardTemplate } from '../archive/dashboard';
+import { default as dashboardTemplate } from './dashboard';
 import type { Env } from './types';
 import { getCookie, setCookie } from 'hono/cookie';
 

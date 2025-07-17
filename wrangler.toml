@@ -1,32 +1,45 @@
-name = "rtm-mcp-server"
+name = "project-cowflare"
 main = "src/index.ts"
-compatibility_date = "2025-03-11"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2025-01-15"
 
-# Production configuration is now the default
-[vars]
-SERVER_URL = "https://rtm-mcp-server.vcto-6e7.workers.dev"
+# Account ID will be set during deployment
+# account_id = "your-account-id"
 
+# KV namespace for OAuth token storage
 [[kv_namespaces]]
 binding = "AUTH_STORE"
-id = "7ca3e0b80b9e429488a0be33d7e259fb"
+id = "mock-auth-store"
+preview_id = "mock-auth-store-preview"
 
+# Durable Objects for MCP session state
 [[durable_objects.bindings]]
-name = "MCP_OBJECT"
-class_name = "RtmMCP"
+name = "MCP_SESSIONS"
+class_name = "CowflareMCP"
+script_name = "project-cowflare"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["RtmMCP"]
+# Environment variables for local development
+[vars]
+MOCK_CLIENT_ID = "mock-client-local"
+MOCK_CLIENT_SECRET = "mock-secret-local"
 
-[[kv_namespaces]]
-binding = "OAUTH_DATABASE"
-id = "d863eecd0c5c45f89e0406dbd4d71f87"
+# Future RTM configuration (commented out for now)
+# RTM_CLIENT_ID = "your-rtm-client-id"
+# RTM_CLIENT_SECRET = "your-rtm-client-secret"
+# RTM_ENDPOINT = "https://rtm.cloudflare.com"
 
-[[kv_namespaces]]
-binding = "OAUTH_SESSIONS"
-id = "ce0578d4c9184ebaa675932efa919c8f"
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
 
-[[kv_namespaces]]
-binding = "OAUTH_KV"
-id = "acd0e7b16f484692843d3988cfdad0db"
+# Build configuration
+[build]
+command = "npm install && npm run build"
+
+[build.upload]
+format = "modules"
+main = "./src/index.ts"
+
+# TypeScript support
+[typescript]
+enabled = true
