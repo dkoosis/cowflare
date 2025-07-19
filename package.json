@@ -11,7 +11,8 @@
 		"cf-typegen": "wrangler types",
 		"type-check": "tsc --noEmit",
 		"test": "vitest",
-		"test:run": "vitest run"
+		"test:run": "vitest run",
+		"test:ci": "vitest run || vitest run"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.0.5",

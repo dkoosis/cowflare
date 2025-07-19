@@ -23,11 +23,13 @@
 │   └── README.md
 ├── test
 │   ├── mcp-tools.test.ts
-│   └── oauth.test.ts
+│   ├── oauth.test.ts
+│   └── setup.ts
+├── test.sh
 ├── tsconfig.json
 ├── vitest.config.ts
 ├── worker-configuration.d.ts
 ├── wrangler.jsonc
 └── wrangler.test.jsonc
 
-7 directories, 24 files
+7 directories, 26 files
