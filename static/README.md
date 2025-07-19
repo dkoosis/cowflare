@@ -6,14 +6,11 @@ Let's get a remote MCP server up-and-running on Cloudflare Workers complete with
 
 ```bash
 # clone the repository
-git clone https://github.com/cloudflare/ai.git
-# Or if using ssh:
-# git clone git@github.com:cloudflare/ai.git
+git clone git@github.com:cloudflare/ai.git
 
 # install dependencies
 cd ai
-# Note: using pnpm instead of just "npm"
-pnpm install
+npm install
 
 # run locally
 npx nx dev remote-mcp-server
@@ -72,7 +69,7 @@ When you open Claude a browser window should open and allow you to login. You sh
 
 ## Deploy to Cloudflare
 
-1. `npx wrangler kv namespace create OAUTH_KV`
+1. `npx wrangler@latest kv namespace create remote-mcp-server-oauth-kv`
 2. Follow the guidance to add the kv namespace ID to `wrangler.jsonc`
 3. `npm run deploy`
 

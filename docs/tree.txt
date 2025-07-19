@@ -1,60 +1,28 @@
 .
-├── archive
-│   ├── adr-architecture-core.md
-│   ├── adr-architecture-rtm-mcp.md
-│   ├── adr-architecture-transport-hybrid.md
-│   ├── adr-auth-rtm-desktop-flow.md
-│   ├── adr-client-web-first.md
-│   ├── adr-platform-cloudflare.md
-│   ├── adr-platform-dependencies.md
-│   ├── adr-platform-typescript.md
-│   ├── adr-practices-telemetry.md
-│   ├── cf_client-connection.txt
-│   ├── cf_client.txt
-│   ├── cf_do-oauth-client-provider.txt
-│   ├── cf_index.txt
-│   ├── cf_mcp-index.txt
-│   ├── dashboard.ts
-│   ├── debug-logger.ts
-│   ├── llms-full.txt
-│   ├── protocol-logger.ts
-│   ├── rtm-api.ts
-│   ├── rtm-handler.ts
-│   ├── rtm-mcp.ts
-│   ├── schemas
-│   │   ├── auth-schemas.ts
-│   │   ├── index.ts
-│   │   ├── list-schemas.ts
-│   │   ├── task-schemas.ts
-│   │   └── utility-schemas.ts
-│   ├── ts-sdk.md
-│   ├── types.ts
-│   └── utils.ts
+├── biome.json
 ├── docs
-│   ├── DEBUG-STATE-RECIPE.yaml
-│   ├── DEBUG-STATE.yaml
-│   ├── reference
-│   │   └── schema.ts
-│   ├── TODO.md
+│   ├── STATE.yaml
+│   ├── testing-standards.md
 │   └── tree.txt
-├── GETTING-STARTED.md
-├── inspector-config.json
+├── img
+│   ├── available-tools.png
+│   ├── claude-does-math-the-fancy-way.png
+│   ├── mcp-inspector-oauth-success.png
+│   ├── mcp-inspector-sse-config.png
+│   ├── mcp-inspector-successful-tool-call.png
+│   └── mcp-login.png
 ├── package-lock.json
 ├── package.json
 ├── README.md
-├── setup.sh
 ├── src
-│   ├── auth
-│   │   └── mock-handler.ts
-│   ├── debug-logger.ts
+│   ├── app.ts
 │   ├── index.ts
-│   └── mcp.ts
-├── test
-│   └── setup.test.ts
-├── test-mcp.sh
+│   └── utils.ts
+├── static
+│   ├── img -> ../img
+│   └── README.md
 ├── tsconfig.json
-├── vitest.config.mts
 ├── worker-configuration.d.ts
-└── wrangler.toml
+└── wrangler.jsonc
 
-8 directories, 50 files
+6 directories, 20 files

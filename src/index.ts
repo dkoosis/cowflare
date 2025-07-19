@@ -1,44 +1,31 @@
-import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
-import { CowflareMCP } from "./mcp";
-import { MockAuthHandler } from "./auth/mock-handler";
+import app from "./app";
+import { McpAgent } from "agents/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import OAuthProvider from "@cloudflare/workers-oauth-provider";
 
-export interface Env {
-  // OAuth provider will use these for token storage
-  AUTH_STORE: KVNamespace;
-  
-  // Mock auth credentials (will be replaced by RTM)
-  MOCK_CLIENT_ID?: string;
-  MOCK_CLIENT_SECRET?: string;
-  
-  // Future RTM integration
-  RTM_CLIENT_ID?: string;
-  RTM_CLIENT_SECRET?: string;
-  RTM_ENDPOINT?: string;
+export class MyMCP extends McpAgent {
+	server = new McpServer({
+		name: "Demo",
+		version: "1.0.0",
+	});
+
+	async init() {
+		this.server.tool("add", { a: z.number(), b: z.number() }, async ({ a, b }) => ({
+			content: [{ type: "text", text: String(a + b) }],
+		}));
+	}
 }
 
-// Main OAuth provider configuration
+// Export the OAuth handler as the default
 export default new OAuthProvider({
-  // SSE endpoint for backward compatibility
-  apiRoute: "/sse",
-  
-  // Our MCP server router
-  apiHandler: CowflareMCP.Router,
-  
-  // Mock authentication handler (to be replaced with RTM)
-  defaultHandler: MockAuthHandler,
-  
-  // OAuth endpoints
-  authorizeEndpoint: "/authorize",
-  tokenEndpoint: "/token",
-  clientRegistrationEndpoint: "/register",
-  
-  // Additional configuration
-  config: {
-    // Allow CORS for local development
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST", "OPTIONS"],
-      headers: ["Content-Type", "Authorization"],
-    },
-  },
+	apiRoute: "/sse",
+	// TODO: fix these types
+	// @ts-expect-error
+	apiHandler: MyMCP.mount("/sse"),
+	// @ts-expect-error
+	defaultHandler: app,
+	authorizeEndpoint: "/authorize",
+	tokenEndpoint: "/token",
+	clientRegistrationEndpoint: "/register",
 });
