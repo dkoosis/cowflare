@@ -12,7 +12,9 @@
 		"type-check": "tsc --noEmit",
 		"test": "vitest",
 		"test:run": "vitest run",
-		"test:ci": "vitest run || vitest run"
+		"test:ci": "vitest run || vitest run",
+		"check:updates": "npm outdated @cloudflare/vitest-pool-workers",
+		"review:prep": "bash scripts/prepare-review.sh"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.0.5",

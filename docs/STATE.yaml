@@ -1,5 +1,6 @@
 # STATE.yaml - Machine-optimized session context
 # Updated: 2025-01-18 - New Session
+# See docs/README.md for documentation index
 
 ## Current State
 status: "development"
@@ -17,10 +18,11 @@ auth:
   - Token-based session management
 
 ## Implementation Plan
-1. Base structure from remote-mcp-server template
-2. Mock OAuth handler (replace GitHub handler)
-3. RTM integration points identified
-4. Test harness for local development
+1. Base structure from remote-mcp-server template ✓
+2. Mock OAuth handler ✓
+3. Quality-first incremental development
+4. Testing foundation before features
+5. RTM integration after stable baseline
 
 ## Known Issues
 - None yet (fresh start)
@@ -38,14 +40,20 @@ auth:
 # - Created complete project structure from remote-mcp-server template
 # - Implemented MockAuthHandler with visual OAuth flow
 # - Set up dual transport support (SSE + Streamable HTTP)
-# - Added three test tools: add, whoami, increment
+# - Starting with single test tool: add (Cloudflare hello world)
 # - Configured for easy RTM integration (handler swap)
 # Current session:
 - Created vitest configuration with Cloudflare Workers pool
-- Wrote oauth.test.ts following testing standards  
-- Wrote mcp-tools.test.ts with schema validation
-- Fixed vitest initialization issue with workaround (press r to rerun)
-- Tests pass on second run
+- Wrote oauth.test.ts and mcp-tools.test.ts  
+- Hit persistent vitest-pool-workers initialization issues
+- Decided to test running worker directly instead
+- Created test-mcp.mjs for basic endpoint testing
+- Documented dead-end in KNOWN-ISSUES.md with version tracking
+- Created TESTING.md with manual test procedures
+- Added npm script to check for vitest-pool-workers updates
+- Established quality-first approach in ROADMAP.md
+- Corrected docs: single `add` tool baseline (not three tools)
+- Clear incremental plan: test foundation before features
 
 ## Discovery
 - Found existing workers in Cloudflare account:

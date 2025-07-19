@@ -1,8 +1,12 @@
 .
 ├── biome.json
 ├── docs
+│   ├── HOW-TO-TEST.md
+│   ├── KNOWN-ISSUES.md
+│   ├── MCP-PROTOCOL-STANDARDS.md
+│   ├── README.md
+│   ├── ROADMAP.md
 │   ├── STATE.yaml
-│   ├── testing-standards.md
 │   └── tree.txt
 ├── img
 │   ├── available-tools.png
@@ -13,7 +17,15 @@
 │   └── mcp-login.png
 ├── package-lock.json
 ├── package.json
+├── prompts
+│   ├── code-smell-analysis.md
+│   ├── README.md
+│   ├── REVIEW-GUIDE.md
+│   └── semantic-naming-review.md
 ├── README.md
+├── reviews
+├── scripts
+│   └── prepare-review.sh
 ├── src
 │   ├── app.ts
 │   ├── index.ts
@@ -25,6 +37,8 @@
 │   ├── mcp-tools.test.ts
 │   ├── oauth.test.ts
 │   └── setup.ts
+├── test-mcp-full.mjs
+├── test-mcp.mjs
 ├── test.sh
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -32,4 +46,4 @@
 ├── wrangler.jsonc
 └── wrangler.test.jsonc
 
-7 directories, 26 files
+10 directories, 37 files
