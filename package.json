@@ -9,7 +9,9 @@
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"test": "vitest",
+		"test:run": "vitest run"
 	},
 	"dependencies": {
 		"@cloudflare/workers-oauth-provider": "^0.0.5",
@@ -22,6 +24,8 @@
 		"marked": "^16.0.0",
 		"typescript": "^5.8.3",
 		"workers-mcp": "^0.0.13",
-		"wrangler": "^4.22.0"
+		"wrangler": "^4.22.0",
+		"vitest": "^1.2.0",
+		"@cloudflare/vitest-pool-workers": "^0.1.0"
 	}
 }

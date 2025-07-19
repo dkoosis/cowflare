@@ -6,8 +6,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "remote-mcp-server",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-03-10",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_date": "2022-10-31",
+	"compatibility_flags": ["nodejs_compat", "export_commonjs_default"],
 	"migrations": [
 		{
 			"new_sqlite_classes": ["MyMCP"],

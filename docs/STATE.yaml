@@ -26,6 +26,7 @@ auth:
 - None yet (fresh start)
 
 ## Session Goals
+- [x] Set up vitest test infrastructure
 - [ ] Test OAuth flow with MCP inspector
 - [ ] Verify tool execution with authentication
 - [ ] Test session persistence
@@ -40,7 +41,10 @@ auth:
 # - Added three test tools: add, whoami, increment
 # - Configured for easy RTM integration (handler swap)
 # Current session:
-- (To be updated)
+- Created vitest configuration with Cloudflare Workers pool
+- Wrote oauth.test.ts following testing standards
+- Wrote mcp-tools.test.ts with schema validation
+- Tests ready to run after npm install
 
 ## Discovery
 - Found existing workers in Cloudflare account:

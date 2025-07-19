@@ -21,8 +21,13 @@
 ├── static
 │   ├── img -> ../img
 │   └── README.md
+├── test
+│   ├── mcp-tools.test.ts
+│   └── oauth.test.ts
 ├── tsconfig.json
+├── vitest.config.ts
 ├── worker-configuration.d.ts
-└── wrangler.jsonc
+├── wrangler.jsonc
+└── wrangler.test.jsonc
 
-6 directories, 20 files
+7 directories, 24 files
