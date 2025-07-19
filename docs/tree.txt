@@ -3,6 +3,7 @@
 ├── docs
 │   ├── HOW-TO-TEST.md
 │   ├── KNOWN-ISSUES.md
+│   ├── LESSONS-LEARNED.md
 │   ├── MCP-PROTOCOL-STANDARDS.md
 │   ├── README.md
 │   ├── ROADMAP.md
@@ -37,8 +38,10 @@
 │   ├── mcp-tools.test.ts
 │   ├── oauth.test.ts
 │   └── setup.ts
+├── test-interactive.sh
 ├── test-mcp-full.mjs
 ├── test-mcp.mjs
+├── test-mcp.sh
 ├── test.sh
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -46,4 +49,4 @@
 ├── wrangler.jsonc
 └── wrangler.test.jsonc
 
-10 directories, 37 files
+10 directories, 40 files

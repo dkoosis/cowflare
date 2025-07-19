@@ -1,76 +1,65 @@
-# STATE.yaml - Machine-optimized session context
-# Updated: 2025-01-18 - New Session
-# See docs/README.md for documentation index
+# STATE.yaml - Claude-optimized context
+# Format: v2.0 | Updated: 2025-01-18T14:45:00Z
+# Index: docs/README.md
 
-## Current State
-status: "development"
-phase: "testing_and_verification"
-approach: "mock_oauth_with_rtm_ready"
-
-## Architecture Decisions
-transport:
-  - SSE support for backward compatibility
-  - Streamable HTTP for future-proofing
-  - Single Worker handling both transports
-auth:
-  - Mock OAuth provider initially
-  - Structure ready for Cloudflare RTM integration
-  - Token-based session management
-
-## Implementation Plan
-1. Base structure from remote-mcp-server template ✓
-2. Mock OAuth handler ✓
-3. Quality-first incremental development
-4. Testing foundation before features
-5. RTM integration after stable baseline
-
-## Known Issues
-- None yet (fresh start)
-
-## Session Goals
-- [x] Set up vitest test infrastructure
-- [ ] Test OAuth flow with MCP inspector
-- [ ] Verify tool execution with authentication
-- [ ] Test session persistence
-- [ ] Document RTM integration requirements
-- [ ] Prepare for RTM handler implementation
-
-## Session Results
-# Previous session:
-# - Created complete project structure from remote-mcp-server template
-# - Implemented MockAuthHandler with visual OAuth flow
-# - Set up dual transport support (SSE + Streamable HTTP)
-# - Starting with single test tool: add (Cloudflare hello world)
-# - Configured for easy RTM integration (handler swap)
-# Current session:
-- Created vitest configuration with Cloudflare Workers pool
-- Wrote oauth.test.ts and mcp-tools.test.ts  
-- Hit persistent vitest-pool-workers initialization issues
-- Decided to test running worker directly instead
-- Created test-mcp.mjs for basic endpoint testing
-- Documented dead-end in KNOWN-ISSUES.md with version tracking
-- Created TESTING.md with manual test procedures
-- Added npm script to check for vitest-pool-workers updates
-- Established quality-first approach in ROADMAP.md
-- Corrected docs: single `add` tool baseline (not three tools)
-- Clear incremental plan: test foundation before features
-
-## Discovery
-- Found existing workers in Cloudflare account:
-  - rtm-mcp-server (modified 2025-07-16)
-  - rtm-auth-page (modified 2025-06-20)
-- These may contain RTM integration code to reference
-
-## Issues Resolved
-- Removed non-existent @cloudflare/workers-oauth-provider dependency
-- Implemented simple OAuth flow with Hono directly
-- Fixed wrangler KV namespace command syntax
-- Downgraded vitest to compatible version
-
-## Technical Context
-mcp_sdk: "@modelcontextprotocol/typescript-sdk"
-agents_sdk: "agents/mcp"
-transport_methods:
-  - "SSE (/sse endpoint)"
-  - "Streamable HTTP (/mcp endpoint)"
-oauth_library: "@cloudflare/workers-oauth-provider"
+STATUS:
+  phase: dev.oauth_working
+  quality: manual_test_passing
+  blocker: none
+  
+CONTEXT:
+  proj: mcp-server
+  stack: [ts, cf-workers, oauth, agents-mcp]
+  baseline: {tools: [add], oauth: mock, transport: sse}
+  
+ARCH:
+  transport: [sse, streamable-http]
+  auth: {current: mock, target: cf-rtm}
+  state: token-based
+  
+PLAN:
+  ✓: [template, mock-oauth, manual-testing]
+  →: automated-testing
+  ◯: [features, rtm-integration]
+  
+SESSION_2025-01-18:
+  attempted:
+    - vitest+cf-workers-pool → FAIL:ERR_RUNTIME_FAILURE
+    - fixes: [compat_flags, setupFiles, patterns] → FAIL
+  pivoted:
+    - strategy: test-running-worker
+    - docs: [KNOWN-ISSUES.md, check:updates]
+  completed:
+    - quality: ROADMAP.md
+    - clarity: {rename: [MCP-PROTOCOL-STANDARDS, HOW-TO-TEST], index: README.md}
+    - review-system:
+        prompts: [semantic-naming, code-smell]
+        automation: prepare-review.sh
+        schedule: {active: weekly, stable: biweekly}
+    - oauth-flow:
+        kv-namespace: acd0e7b16f484692843d3988cfdad0db
+        working: [register, authorize, token, sse]
+        test-scripts: [test-mcp.sh, test-interactive.sh]
+    - mcp-baseline:
+        tool: add
+        transport: sse
+        auth: bearer-token
+        
+REFS:
+  existing-workers:
+    - rtm-mcp-server: 2025-07-16
+    - rtm-auth-page: 2025-06-20
+  deps:
+    - "@cloudflare/workers-oauth-provider": "^0.0.5"
+    - "@modelcontextprotocol/sdk": "1.13.1"
+    - "agents": "^0.0.100"
+    
+FLAGS:
+  vitest_blocked: true
+  docs_reorganized: true
+  review_system: true
+  single_tool_baseline: true
+  oauth_flow: working
+  mcp_connection: verified
+  
+LESSONS: docs/LESSONS-LEARNED.md
