@@ -42,9 +42,10 @@ auth:
 # - Configured for easy RTM integration (handler swap)
 # Current session:
 - Created vitest configuration with Cloudflare Workers pool
-- Wrote oauth.test.ts following testing standards
+- Wrote oauth.test.ts following testing standards  
 - Wrote mcp-tools.test.ts with schema validation
-- Tests ready to run after npm install
+- Fixed vitest initialization issue with workaround (press r to rerun)
+- Tests pass on second run
 
 ## Discovery
 - Found existing workers in Cloudflare account:
