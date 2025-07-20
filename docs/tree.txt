@@ -26,7 +26,11 @@
 ├── README.md
 ├── reviews
 ├── scripts
-│   └── prepare-review.sh
+│   ├── build.sh
+│   ├── lint-src.sh
+│   ├── prepare-review.sh
+│   ├── test-all.sh
+│   └── test-quick.sh
 ├── src
 │   ├── app.ts
 │   ├── index.ts
@@ -49,4 +53,4 @@
 ├── wrangler.jsonc
 └── wrangler.test.jsonc
 
-10 directories, 40 files
+10 directories, 44 files

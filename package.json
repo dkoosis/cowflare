@@ -5,14 +5,20 @@
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
-		"format": "biome format --write",
-		"lint:fix": "biome lint --fix",
+		"format": "biome format --write src test",
+		"lint": "biome check src test",
+		"lint:fix": "biome check src test --write",
+		"lint:all": "biome check",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
 		"type-check": "tsc --noEmit",
-		"test": "vitest",
-		"test:run": "vitest run",
-		"test:ci": "vitest run || vitest run",
+		"prepare": "bash scripts/build.sh",
+		"test": "bash scripts/test-quick.sh",
+		"test:integration": "bash test-mcp.sh",
+		"test:interactive": "bash test-interactive.sh",
+		"test:all": "bash scripts/test-all.sh",
+		"build:test": "npm run prepare && npm run test:all",
+		"precommit": "npm run build:test",
 		"check:updates": "npm outdated @cloudflare/vitest-pool-workers",
 		"review:prep": "bash scripts/prepare-review.sh"
 	},
@@ -24,11 +30,12 @@
 		"zod": "^3.25.67"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.1.2",
+		"@cloudflare/vitest-pool-workers": "^0.1.0",
 		"marked": "^16.0.0",
 		"typescript": "^5.8.3",
-		"workers-mcp": "^0.0.13",
-		"wrangler": "^4.22.0",
 		"vitest": "^1.2.0",
-		"@cloudflare/vitest-pool-workers": "^0.1.0"
+		"workers-mcp": "^0.0.13",
+		"wrangler": "^4.22.0"
 	}
 }

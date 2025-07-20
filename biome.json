@@ -1,15 +1,8 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
-	"assist": {
-		"actions": {
-			"source": {
-				"useSortedKeys": "on"
-			}
-		},
-		"enabled": true
-	},
+	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
 	"files": {
-		"includes": ["!worker-configuration.d.ts"]
+		"ignoreUnknown": true,
+		"includes": ["src/**/*.ts", "test/**/*.ts", "*.mjs"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -21,29 +14,12 @@
 		"rules": {
 			"recommended": true,
 			"style": {
-				"noInferrableTypes": "error",
-				"noNonNullAssertion": "off",
-				"noParameterAssign": "error",
-				"noUnusedTemplateLiteral": "error",
-				"noUselessElse": "error",
-				"useAsConstAssertion": "error",
-				"useDefaultParameterLast": "error",
-				"useEnumInitializers": "error",
-				"useNumberNamespace": "error",
-				"useSelfClosingElements": "error",
-				"useSingleVarDeclarator": "error"
+				"noNonNullAssertion": "off"
 			},
 			"suspicious": {
-				"noConfusingVoidType": "off",
-				"noDebugger": "off",
-				"noExplicitAny": "off"
+				"noExplicitAny": "off",
+				"noDebugger": "warn"
 			}
 		}
-	},
-	"root": false,
-	"vcs": {
-		"clientKind": "git",
-		"enabled": true,
-		"useIgnoreFile": true
 	}
 }

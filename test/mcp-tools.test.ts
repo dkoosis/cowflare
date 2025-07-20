@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { z } from "zod";
 import { MyMCP } from "../src/index";
 
@@ -23,7 +23,7 @@ describe("MCP Tool Registration", () => {
 
 	test("MyMCP_RegistersAddTool_When_InitCalled", async () => {
 		await mcp.init();
-		
+
 		// Tool registration happens internally, we can't directly test it
 		// But we can verify init completes without errors
 		expect(true).toBe(true);

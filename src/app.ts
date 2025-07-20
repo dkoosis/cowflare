@@ -1,14 +1,14 @@
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import {
-	layout,
 	homeContent,
+	layout,
 	parseApproveFormBody,
-	renderAuthorizationRejectedContent,
 	renderAuthorizationApprovedContent,
+	renderAuthorizationRejectedContent,
 	renderLoggedInAuthorizeScreen,
 	renderLoggedOutAuthorizeScreen,
 } from "./utils";
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 export type Bindings = Env & {
 	OAUTH_PROVIDER: OAuthHelpers;
@@ -57,9 +57,7 @@ app.get("/authorize", async (c) => {
 // This endpoint is responsible for validating any login information and
 // then completing the authorization request with the OAUTH_PROVIDER
 app.post("/approve", async (c) => {
-	const { action, oauthReqInfo, email, password } = await parseApproveFormBody(
-		await c.req.parseBody(),
-	);
+	const { action, oauthReqInfo, email } = await parseApproveFormBody(await c.req.parseBody());
 
 	if (!oauthReqInfo) {
 		return c.html("INVALID LOGIN", 401);
@@ -96,7 +94,7 @@ app.post("/approve", async (c) => {
 				userEmail: email || "user@example.com",
 			},
 		});
-		
+
 		return c.html(
 			layout(
 				await renderAuthorizationApprovedContent(redirectTo),
@@ -106,7 +104,9 @@ app.post("/approve", async (c) => {
 	} catch (error) {
 		console.error("OAuth error:", error);
 		// For local testing, simulate success with a mock redirect
-		const mockRedirect = "http://localhost:8080/callback?code=mock-auth-code&state=" + (oauthReqInfo.state || "");
+		const mockRedirect =
+			"http://localhost:8080/callback?code=mock-auth-code&state=" +
+			(oauthReqInfo.state || "");
 		return c.html(
 			layout(
 				await renderAuthorizationApprovedContent(mockRedirect),
@@ -114,8 +114,6 @@ app.post("/approve", async (c) => {
 			),
 		);
 	}
-
-
 });
 
 export default app;

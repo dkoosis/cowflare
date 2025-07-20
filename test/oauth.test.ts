@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeAll } from "vitest";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import app from "../src/app";
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 // Schema validation following testing standards
 const OAuthAuthRequestSchema = z.object({
@@ -17,7 +17,7 @@ describe("OAuth Authorization Flow", () => {
 		parseAuthRequest: async (request: Request) => {
 			const url = new URL(request.url);
 			const params = Object.fromEntries(url.searchParams);
-			
+
 			// Validate request parameters
 			const validated = OAuthAuthRequestSchema.parse({
 				client_id: params.client_id || "test-client",
@@ -31,7 +31,7 @@ describe("OAuth Authorization Flow", () => {
 		},
 		completeAuthorization: async (options: any) => {
 			return {
-				redirectTo: `${options.request.redirect_uri}?code=test-auth-code&state=${options.request.state || ''}`,
+				redirectTo: `${options.request.redirect_uri}?code=test-auth-code&state=${options.request.state || ""}`,
 			};
 		},
 	};
@@ -54,7 +54,9 @@ describe("OAuth Authorization Flow", () => {
 	});
 
 	test("App_ShowsAuthorizationScreen_When_AuthorizeEndpointCalled", async () => {
-		const request = new Request("http://localhost/authorize?client_id=test&redirect_uri=http://localhost:3000/callback");
+		const request = new Request(
+			"http://localhost/authorize?client_id=test&redirect_uri=http://localhost:3000/callback",
+		);
 		const response = await app.fetch(request, env);
 
 		expect(response.status).toBe(200);
@@ -69,12 +71,15 @@ describe("OAuth Authorization Flow", () => {
 		const formData = new FormData();
 		formData.append("action", "approve");
 		formData.append("email", "test@example.com");
-		formData.append("oauthReqInfo", JSON.stringify({
-			client_id: "test",
-			redirect_uri: "http://localhost:3000/callback",
-			response_type: "code",
-			scope: "read_profile read_data",
-		}));
+		formData.append(
+			"oauthReqInfo",
+			JSON.stringify({
+				client_id: "test",
+				redirect_uri: "http://localhost:3000/callback",
+				response_type: "code",
+				scope: "read_profile read_data",
+			}),
+		);
 
 		const request = new Request("http://localhost/approve", {
 			method: "POST",

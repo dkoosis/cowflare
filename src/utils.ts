@@ -1,9 +1,10 @@
 // Helper to generate the layout
+
+import { env } from "cloudflare:workers";
+import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { marked } from "marked";
-import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
-import { env } from "cloudflare:workers";
 
 // This file mainly exists as a dumping ground for uninteresting html and CSS
 // to remove clutter and noise from the auth logic. You likely do not need
@@ -388,16 +389,14 @@ export const renderAuthorizationRejectedContent = async (redirectUrl: string) =>
 	return renderApproveContent("Authorization rejected.", "error", redirectUrl);
 };
 
-export const parseApproveFormBody = async (body: {
-	[x: string]: string | File;
-}) => {
+export const parseApproveFormBody = async (body: { [x: string]: string | File }) => {
 	const action = body.action as string;
 	const email = body.email as string;
 	const password = body.password as string;
 	let oauthReqInfo: AuthRequest | null = null;
 	try {
 		oauthReqInfo = JSON.parse(body.oauthReqInfo as string) as AuthRequest;
-	} catch (e) {
+	} catch (_e) {
 		oauthReqInfo = null;
 	}
 
